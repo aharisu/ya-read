@@ -1,8 +1,8 @@
-(use util.trie)
+(define-module ex-trie
+  (extend util.trie)
+  (export trie-common-prefix-continuation))
 
-(select-module util.trie)
-
-(export trie-common-prefix-continuation)
+(select-module ex-trie)
 
 (define (%trie-get-node-from-elt trie elt)
   (and-let* ([table (%node-table (slot-ref trie 'root))])

@@ -1,7 +1,7 @@
 (use gauche.test)
 (test-start "extend-trie")
 
-(load "trie.scm")
+(use ex-trie)
 
 (use gauche.sequence)
 (use srfi-1)

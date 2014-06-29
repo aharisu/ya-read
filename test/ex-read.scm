@@ -66,3 +66,10 @@
   (test* "line comment read" 'a (ex-read port))
   (test* "line comment read" 'a (ex-read port))
   (test* "line comment read" (eof-object) (ex-read port)))
+
+(let1 port (wrap-ex-port (open-input-string "a#;bc\n #;(a ;)\r b)c"))
+  (test* "s-exp comment read" 'a (ex-read port))
+  (test* "s-exp comment read" 'c (ex-read port))
+  (test* "s-exp comment read" (eof-object) (ex-read port)))
+
+

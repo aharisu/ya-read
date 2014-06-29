@@ -6,6 +6,8 @@
 
 (select-module ex-read)
 
+(define *orginal-read* read)
+
 (define *char-kind-table*
   (make-parameter
     '((#\tab . whitespace)
@@ -83,7 +85,44 @@
                      (read-error "bad dot syntax" port)]))]))]
         [else
           (loop (cons result pair))]))))
+
+(define (read-double-quote port)
+  (read-string port #f))
+
+(define (read-hash-ster-double-quote port)
+  (read-string port #t))
+
+(define (read-string port incomplete?)
+  (define (eof-error str-acc)
+    (write-char #\" str-acc)
+    (read-error (format "EOF encountered in a string literal: ~a"
+                        (get-output-string str-acc))
+                port))
+  (let1 str-acc (open-output-string)
+    (when incomplete?
+      (write-char #\# str-acc)
+      (write-char #\* str-acc))
+    (write-char #\" str-acc)
+    (let loop ()
+      (let1 ch (read-char port)
+        (cond
+          [(eof-object? ch)
+           (eof-error str-acc)]
+          [(char=? ch #\")
+           (write-char #\" str-acc)]
+          [(char=? ch #\\)
+           (write-char #\\ str-acc)
+           (let1 escape-ch (read-char port)
+             (if (eof-object? escape-ch)
+               (eof-error str-acc)
+               (write-char escape-ch str-acc)))
+           (loop)]
+          [else
+            (write-char ch str-acc)
+            (loop)])))
+    (*orginal-read* (open-input-string (get-output-string str-acc)))))
   
+
 (define *reader-table*
   (make-parameter
     (rlet1 trie (make-trie
@@ -101,6 +140,8 @@
       (trie-put! trie ")" (cons-reader-macro :term read-close-paren))
       (trie-put! trie "[" (cons-reader-macro :term read-open-bracket))
       (trie-put! trie "]" (cons-reader-macro :term read-close-bracket))
+      (trie-put! trie "\"" (cons-reader-macro :term read-double-quote))
+      (trie-put! trie "#*\"" (cons-reader-macro :term read-hash-ster-double-quote))
       )))
 
 ;-------------------------
@@ -159,7 +200,7 @@
       [else
         (case (char-kind ch kind-table)
           [(constituent)
-           (do-read-constituent delim port ch kind-table reader-macro reader-table-cont
+           (do-read-constituent delim port ch kind-table reader-table reader-table-cont
                                 buffer non-term-macro-candidates
                                 pending-chars
                                 )]

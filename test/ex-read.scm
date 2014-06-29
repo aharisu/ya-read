@@ -42,6 +42,14 @@
   (test* "list read" (test-error) (ex-read port)) ;;read close bracket
   (test* "list read" (eof-object) (ex-read port)))
 
+(let1 port (wrap-ex-port (open-input-string "#(a b c) a#(b c)d #(a b . c)"))
+  (test* "vector read" #(a b c) (ex-read port))
+  (test* "vector read" 'a (ex-read port))
+  (test* "vector read" #(b c) (ex-read port))
+  (test* "vector read" 'd (ex-read port))
+  (test* "vector read" (test-error) (ex-read port))
+  (test* "vector read" (eof-object) (ex-read port)))
+
 (let1 port (wrap-ex-port (open-input-string "\"abc\" \"a\n\r\" \"\x40\u3042\""))
   (test* "string read" "abc" (ex-read port))
   (test* "string read" "a\n\r" (ex-read port))

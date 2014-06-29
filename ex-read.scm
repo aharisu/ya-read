@@ -79,6 +79,9 @@
         [else
           (loop (cons result pair))]))))
 
+(define (read-vector ctx port)
+  (list->vector (read-list #\) ctx port)))
+
 (define (read-string incomplete? ctx port)
   (define (eof-error str-acc)
     (write-char #\" str-acc)
@@ -194,6 +197,7 @@
       (trie-put! trie "#;" (cons-reader-macro :term read-sexp-comment))
       (trie-put! trie "#|" (cons-reader-macro :term (pa$ read-block-comment '(#\# #\|) '(#\| #\#))))
       (trie-put! trie "#\\" (cons-reader-macro :term read-character))
+      (trie-put! trie "#(" (cons-reader-macro :term read-vector))
       )))
 
 ;-------------------------

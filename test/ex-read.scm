@@ -54,6 +54,15 @@
   (test* "string read" #*"@あ" (ex-read port))
   (test* "string read" (eof-object) (ex-read port)))
 
+(let1 port (wrap-ex-port (open-input-string "#\\a #\\; #\\newline #\\tab #\\x0A #\\u3042"))
+  (test* "char read" #\a (ex-read port))
+  (test* "char read" #\; (ex-read port))
+  (test* "char read" #\newline (ex-read port))
+  (test* "char read" #\tab (ex-read port))
+  (test* "char read" #\x0A (ex-read port))
+  (test* "char read" #\u3042 (ex-read port))
+  (test* "char read" (eof-object) (ex-read port)))
+
 (let1 port (wrap-ex-port (open-input-string "#f #t aiu#t#f"))
   (test* "bool read" #f (ex-read port))
   (test* "bool read" #t (ex-read port))

@@ -109,6 +109,14 @@
             (loop)])))
     (*orginal-read* (open-input-string (get-output-string str-acc)))))
 
+(define (read-character ctx port)
+  (let1 first-ch (read-char port)
+    (if (eof-object? first-ch)
+      (read-error "EOF encountered in a character literal" port)
+      (let1 char-str (do-read-loop-no-readermacro #f ctx port (*char-kind-table*) (*reader-table*) 
+                                                  (list first-ch) '())
+        (*orginal-read* (open-input-string (string-append "#\\" char-str)))))))
+
 (define (read-true ctx port)
   #t)
 
@@ -185,6 +193,7 @@
       (trie-put! trie ";" (cons-reader-macro :term read-line-comment))
       (trie-put! trie "#;" (cons-reader-macro :term read-sexp-comment))
       (trie-put! trie "#|" (cons-reader-macro :term (pa$ read-block-comment '(#\# #\|) '(#\| #\#))))
+      (trie-put! trie "#\\" (cons-reader-macro :term read-character))
       )))
 
 ;-------------------------

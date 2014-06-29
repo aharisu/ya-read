@@ -1,5 +1,6 @@
 (define-module ex-read
   (use gauche.parameter)
+  (use gauche.uvector)
   (use ex-port)
   (use ex-trie)
   (export ex-read))
@@ -79,8 +80,8 @@
         [else
           (loop (cons result pair))]))))
 
-(define (read-vector ctx port)
-  (list->vector (read-list #\) ctx port)))
+(define (read-vector to->vector ctx port)
+  (to->vector (read-list #\) ctx port)))
 
 (define (read-string incomplete? ctx port)
   (define (eof-error str-acc)
@@ -197,7 +198,17 @@
       (trie-put! trie "#;" (cons-reader-macro :term read-sexp-comment))
       (trie-put! trie "#|" (cons-reader-macro :term (pa$ read-block-comment '(#\# #\|) '(#\| #\#))))
       (trie-put! trie "#\\" (cons-reader-macro :term read-character))
-      (trie-put! trie "#(" (cons-reader-macro :term read-vector))
+      (trie-put! trie "#(" (cons-reader-macro :term (pa$ read-vector list->vector)))
+      (trie-put! trie "#u8(" (cons-reader-macro :term (pa$ read-vector list->u8vector)))
+      (trie-put! trie "#u16(" (cons-reader-macro :term (pa$ read-vector list->u16vector)))
+      (trie-put! trie "#u32(" (cons-reader-macro :term (pa$ read-vector list->u32vector)))
+      (trie-put! trie "#u64(" (cons-reader-macro :term (pa$ read-vector list->u64vector)))
+      (trie-put! trie "#s16(" (cons-reader-macro :term (pa$ read-vector list->s16vector)))
+      (trie-put! trie "#s32(" (cons-reader-macro :term (pa$ read-vector list->s32vector)))
+      (trie-put! trie "#s64(" (cons-reader-macro :term (pa$ read-vector list->s64vector)))
+      (trie-put! trie "#f16(" (cons-reader-macro :term (pa$ read-vector list->f16vector)))
+      (trie-put! trie "#f32(" (cons-reader-macro :term (pa$ read-vector list->f32vector)))
+      (trie-put! trie "#f64(" (cons-reader-macro :term (pa$ read-vector list->f64vector)))
       )))
 
 ;-------------------------

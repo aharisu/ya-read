@@ -44,17 +44,11 @@
 
 (define delim-sym (gensym))
 
-(define (read-single-quote port)
+(define (read-quote port)
   (list 'quote (do-read #f port)))
-
-(define (read-open-paren port)
-  (read-list #\) port))
 
 (define (read-close-paren port)
   (read-error "unexpected close paren ')'" port))
-
-(define (read-open-bracket port)
-  (read-list #\] port))
 
 (define (read-close-bracket port)
   (read-error "unexpected close paren ']'" port))
@@ -86,13 +80,7 @@
         [else
           (loop (cons result pair))]))))
 
-(define (read-double-quote port)
-  (read-string port #f))
-
-(define (read-hash-ster-double-quote port)
-  (read-string port #t))
-
-(define (read-string port incomplete?)
+(define (read-string incomplete? port)
   (define (eof-error str-acc)
     (write-char #\" str-acc)
     (read-error (format "EOF encountered in a string literal: ~a"
@@ -122,10 +110,10 @@
             (loop)])))
     (*orginal-read* (open-input-string (get-output-string str-acc)))))
 
-(define (read-hash-t port)
+(define (read-true port)
   #t)
 
-(define (read-hash-f port)
+(define (read-false port)
   #f)
 
 (define *reader-table*
@@ -140,15 +128,15 @@
                   (lambda (t f s) 
                     (fold (lambda (node acc) (f (car node) (cdr node) acc)) s t))
                   )
-      (trie-put! trie "'" (cons-reader-macro :term read-single-quote))
-      (trie-put! trie "(" (cons-reader-macro :term read-open-paren))
+      (trie-put! trie "'" (cons-reader-macro :term read-quote))
+      (trie-put! trie "(" (cons-reader-macro :term (pa$ read-list #\))))
       (trie-put! trie ")" (cons-reader-macro :term read-close-paren))
-      (trie-put! trie "[" (cons-reader-macro :term read-open-bracket))
+      (trie-put! trie "[" (cons-reader-macro :term (pa$ read-list #\])))
       (trie-put! trie "]" (cons-reader-macro :term read-close-bracket))
-      (trie-put! trie "\"" (cons-reader-macro :term read-double-quote))
-      (trie-put! trie "#*\"" (cons-reader-macro :term read-hash-ster-double-quote))
-      (trie-put! trie "#t" (cons-reader-macro :non-term read-hash-t))
-      (trie-put! trie "#f" (cons-reader-macro :non-term read-hash-f))
+      (trie-put! trie "\"" (cons-reader-macro :term (pa$ read-string #f)))
+      (trie-put! trie "#*\"" (cons-reader-macro :term (pa$ read-string #t)))
+      (trie-put! trie "#t" (cons-reader-macro :non-term read-true))
+      (trie-put! trie "#f" (cons-reader-macro :non-term read-false))
       )))
 
 ;-------------------------

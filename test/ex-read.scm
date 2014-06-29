@@ -59,3 +59,10 @@
   (test* "bool read" #t (ex-read port))
   (test* "bool read" '|aiu#t#f| (ex-read port))
   (test* "bool read" (eof-object) (ex-read port)))
+
+(let1 port (wrap-ex-port (open-input-string "a;bcd\n a ;bc\r a;\r\n a;"))
+  (test* "line comment read" 'a (ex-read port))
+  (test* "line comment read" 'a (ex-read port))
+  (test* "line comment read" 'a (ex-read port))
+  (test* "line comment read" 'a (ex-read port))
+  (test* "line comment read" (eof-object) (ex-read port)))

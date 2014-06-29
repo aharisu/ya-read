@@ -116,6 +116,18 @@
 (define (read-false port)
   #f)
 
+(define (read-line-comment port)
+  (let loop ([ch (read-char port)])
+    (cond
+      [(or (eof-object? ch) (char=? ch #\newline)) ]
+      [(char=? ch #\return)
+       (let1 next-ch (read-char port)
+         (if (not (or (eof-object? ch) (char=? #\newline ch)))
+           (ungetc next-ch port)))]
+      [else (loop (read-char port))]))
+  ;;no value
+  (values))
+
 (define *reader-table*
   (make-parameter
     (rlet1 trie (make-trie
@@ -137,6 +149,7 @@
       (trie-put! trie "#*\"" (cons-reader-macro :term (pa$ read-string #t)))
       (trie-put! trie "#t" (cons-reader-macro :non-term read-true))
       (trie-put! trie "#f" (cons-reader-macro :non-term read-false))
+      (trie-put! trie ";" (cons-reader-macro :term read-line-comment))
       )))
 
 ;-------------------------

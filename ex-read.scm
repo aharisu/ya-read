@@ -121,7 +121,12 @@
             (write-char ch str-acc)
             (loop)])))
     (*orginal-read* (open-input-string (get-output-string str-acc)))))
-  
+
+(define (read-hash-t port)
+  #t)
+
+(define (read-hash-f port)
+  #f)
 
 (define *reader-table*
   (make-parameter
@@ -142,6 +147,8 @@
       (trie-put! trie "]" (cons-reader-macro :term read-close-bracket))
       (trie-put! trie "\"" (cons-reader-macro :term read-double-quote))
       (trie-put! trie "#*\"" (cons-reader-macro :term read-hash-ster-double-quote))
+      (trie-put! trie "#t" (cons-reader-macro :non-term read-hash-t))
+      (trie-put! trie "#f" (cons-reader-macro :non-term read-hash-f))
       )))
 
 ;-------------------------

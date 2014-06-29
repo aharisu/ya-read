@@ -33,10 +33,57 @@
 ; reader macro functions
 ;-------------------------
 
+(define (read-error msg port)
+  (raise (make <read-error>
+               :message msg
+               :port (slot-ref port 'port)
+               :line (slot-ref port 'line)
+               :column (slot-ref port 'col))))
+
+(define delim-sym (gensym))
+
 (define (read-single-quote port)
   (list 'quote (do-read #f port)))
 
+(define (read-open-paren port)
+  (read-list #\) port))
 
+(define (read-close-paren port)
+  (read-error "unexpected close paren ')'" port))
+
+(define (read-open-bracket port)
+  (read-list #\] port))
+
+(define (read-close-bracket port)
+  (read-error "unexpected close paren ']'" port))
+
+(define (read-list closer port)
+  (let loop ([pair '()])
+    (let1 result (do-read closer port)
+      (cond
+        [(eof-object? result)
+         (read-error "unexpected end-of-file while reading a list" port)]
+        [(eq? result delim-sym)
+         (reverse pair)]
+        [(eq? result '|.|)
+         (let1 last-ch (do-read closer port)
+           (cond
+             [(eof-object? last-ch)
+              (read-error "unexpected end-of-file while reading a list" port)]
+             [(eq? last-ch delim-sym)
+              (read-error "bad dot syntax" port)]
+             [else
+               (let1 close-ch (do-read closer port)
+                 (cond
+                   [(eof-object? close-ch)
+                    (read-error "unexpected end-of-file while reading a list" port)]
+                   [(eq? close-ch delim-sym)
+                    (reverse pair last-ch)]
+                   [else
+                     (read-error "bad dot syntax" port)]))]))]
+        [else
+          (loop (cons result pair))]))))
+  
 (define *reader-table*
   (make-parameter
     (rlet1 trie (make-trie
@@ -50,6 +97,10 @@
                     (fold (lambda (node acc) (f (car node) (cdr node) acc)) s t))
                   )
       (trie-put! trie "'" (cons-reader-macro :term read-single-quote))
+      (trie-put! trie "(" (cons-reader-macro :term read-open-paren))
+      (trie-put! trie ")" (cons-reader-macro :term read-close-paren))
+      (trie-put! trie "[" (cons-reader-macro :term read-open-bracket))
+      (trie-put! trie "]" (cons-reader-macro :term read-close-bracket))
       )))
 
 ;-------------------------
@@ -59,15 +110,13 @@
 (define (ex-read :optional port)
   (do-read #f port))
 
-(define delim-sym (gensym))
-
 (define (do-read delim port)
   (let1 result (do-read-first delim port (*char-kind-table*) (*reader-table*))
     (cond
       [(eq? result :eof)
        (eof-object)]
-      [(eq? result :dlim)
-       elim-sym]
+      [(eq? result :delim)
+       delim-sym]
       [(string? result)
        (read-symbol-or-number result)]
       [(reader-macro? result)
@@ -77,11 +126,7 @@
            (car macro-result)))]
       [else
         ;;error result format '(error-msg)
-        (raise (make <read-error>
-                     :message (car result)
-                     :port (slot-ref port 'port)
-                     :line (slot-ref port 'line)
-                     :column (slot-ref port 'col)))])))
+        (read-error (car result) port)])))
 
 (define (do-read-first delim port kind-table reader-table)
   (let1 ch (read-char port)

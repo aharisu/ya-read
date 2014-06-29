@@ -29,3 +29,16 @@
   (test* "quote read" 'd (ex-read port))
   (test* "quote read" ''ef (ex-read port))
   (test* "quote read" (eof-object) (ex-read port)))
+
+(let1 port (wrap-ex-port (open-input-string "(a b c) a(b c)d (a b . c) (a b . c d) [a b c] ]"))
+  (test* "list read" '(a b c) (ex-read port))
+  (test* "list read" 'a (ex-read port))
+  (test* "list read" '(b c) (ex-read port))
+  (test* "list read" 'd (ex-read port))
+  (test* "list read" '(a b . c) (ex-read port))
+  (test* "list read" (test-error) (ex-read port)) ;;bad dot syntax of (a b . c d)
+  (test* "list read" (test-error) (ex-read port)) ;;read close paren of (a b . c d)
+  (test* "list read" '(a b c) (ex-read port))
+  (test* "list read" (test-error) (ex-read port)) ;;read close bracket
+  (test* "list read" (eof-object) (ex-read port)))
+

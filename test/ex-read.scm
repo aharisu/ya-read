@@ -23,3 +23,9 @@
   (test* "number read" 2-i (ex-read port))
   (test* "number read" #xFF (ex-read port))
   (test* "number read" (eof-object) (ex-read port)))
+
+(let1 port (wrap-ex-port (open-input-string "'abc d'ef"))
+  (test* "quote read" ''abc (ex-read port))
+  (test* "quote read" 'd (ex-read port))
+  (test* "quote read" ''ef (ex-read port))
+  (test* "quote read" (eof-object) (ex-read port)))

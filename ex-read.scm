@@ -17,21 +17,6 @@
       (#\| . multi-escape)
       )))
 
-(define *reader-table*
-  (make-parameter
-    (rlet1 trie (make-trie
-                  list
-                  (cut assoc-ref <> <> #f char=?)
-                  (lambda (t k v)
-                    (if v
-                      (assoc-set! t k v char=?)
-                      (alist-delete! k t char=?)))
-                  (lambda (t f s) 
-                    (fold (lambda (node acc) (f (car node) (cdr node) acc)) s t))
-                  )
-      )))
-
-
 (define cons-reader-macro cons)
 (define (reader-macro? obj)
   (and (pair? obj)
@@ -44,8 +29,35 @@
 (define (term-reader-macro? reader-macro)
   (eq? (get-reader-macro-type reader-macro) :term))
 
+;-------------------------
+; reader macro functions
+;-------------------------
+
+(define (read-single-quote port)
+  (list 'quote (do-read #f port)))
+
+
+(define *reader-table*
+  (make-parameter
+    (rlet1 trie (make-trie
+                  list
+                  (cut assoc-ref <> <> #f char=?)
+                  (lambda (t k v)
+                    (if v
+                      (assoc-set! t k v char=?)
+                      (alist-delete! k t char=?)))
+                  (lambda (t f s) 
+                    (fold (lambda (node acc) (f (car node) (cdr node) acc)) s t))
+                  )
+      (trie-put! trie "'" (cons-reader-macro :term read-single-quote))
+      )))
+
+;-------------------------
+; reader entry point
+;-------------------------
+
 (define (ex-read :optional port)
-  (do-read (undefined) port))
+  (do-read #f port))
 
 (define delim-sym (gensym))
 
@@ -59,8 +71,10 @@
       [(string? result)
        (read-symbol-or-number result)]
       [(reader-macro? result)
-       (error "todo reader macro")
-       ]
+       (let1 macro-result (values->list ((get-reader-macro-fun result) port))
+         (if (null? macro-result)
+           (do-read delim port)
+           (car macro-result)))]
       [else
         ;;error result format '(error-msg)
         (raise (make <read-error>
@@ -206,8 +220,7 @@
           [(illegal)
            (error "todo illegal")])])))
 
-(define (do-read-non-term-candidate next-type delim port ch kind-table reader-table reader-table-cont
-                                    buffer non-term-macro-candidates
+(define (do-read-non-term-candidate next-type delim port ch kind-table reader-table reader-table-cont buffer non-term-macro-candidates
                                     pending-chars candidate-reader-macro
                                     )
   (if (and (null? buffer) (null? pending-chars))
@@ -242,7 +255,8 @@
                     ret]))))))
       (cond
         [(integer? new-non-term-macro-candidates)
-         ]
+         (receive (ungetc-chars result-chars) (split-at buffer new-non-term-macro-candidates)
+           (do-read-end port result-chars (append ungetc-chars pending-chars) candidate-reader-macro))]
         [(eq? next-type :normal)
          (do-read-loop delim port kind-table reader-table reader-table-cont
                        buffer new-non-term-macro-candidates

@@ -16,7 +16,6 @@
       (#\page . whitespace)
       (#\return . whitespace)
       (#\space . whitespace)
-      (#\| . multi-escape)
       )))
 
 (define cons-reader-macro cons)
@@ -133,6 +132,35 @@
   (do-read #f (add-context ctx :skip) port)
   (values))
 
+(define (read-block-comment opener closer ctx port)
+  (define (match-test char-list)
+    (let match-test-loop ([char-list char-list]
+                          [pending-chars '()])
+      (if (null? char-list)
+        #t
+        (let1 ch (read-char port)
+          (if (char=? ch (car char-list))
+            (match-test-loop (cdr char-list) (cons ch pending-chars))
+            (begin
+              (for-each (cut ungetc <> port) pending-chars)
+              #f))))))
+  (let loop ([nest-level 1])
+    (let1 ch (read-char port)
+      (cond
+        [(eof-object? ch) ]
+        [(char=? ch (car opener))
+         (if (match-test (cdr opener))
+           (loop (+ nest-level 1))
+           (loop nest-level))]
+        [(char=? ch (car closer))
+         (if (match-test (cdr closer))
+           (unless (= nest-level 1)
+             (loop (- nest-level 1)))
+           (loop nest-level))]
+        [else
+          (loop nest-level)])))
+  (values))
+
 (define *reader-table*
   (make-parameter
     (rlet1 trie (make-trie
@@ -156,6 +184,7 @@
       (trie-put! trie "#f" (cons-reader-macro :non-term read-false))
       (trie-put! trie ";" (cons-reader-macro :term read-line-comment))
       (trie-put! trie "#;" (cons-reader-macro :term read-sexp-comment))
+      (trie-put! trie "#|" (cons-reader-macro :term (pa$ read-block-comment '(#\# #\|) '(#\| #\#))))
       )))
 
 ;-------------------------
@@ -207,8 +236,6 @@
                                 '() '() '())]
           [(whitespace)
            (do-read-first delim ctx port kind-table reader-table)]
-          [(multi-escape)
-           (error "todo multi-escape")]
           [(illegal)
            (error "todo illegal")])])))
 
@@ -230,8 +257,6 @@
                                 )]
           [(whitespace)
            (do-read-end ctx port buffer pending-chars candidate-reader-macro term-macro-candidates)]
-          [(multi-escape)
-           (error "todo multi-escape")]
           [(illegal)
            (error "todo illegal")])])))
 
@@ -254,8 +279,6 @@
              )]
           [(whitespace)
            (do-read-end ctx port buffer [] #f term-macro-candidates)]
-          [(multi-escape)
-           (error "todo multi-escape")]
           [(illegal)
            ])])))
 
@@ -325,8 +348,6 @@
                  (values reader-macro (cons ch pending-chars))]))]
           [(whitespace)
            (values reader-macro pending-chars)]
-          [(multi-escape)
-           (values reader-macro (cons ch pending-chars))]
           [(illegal)
            (error "todo illegal")])])))
 

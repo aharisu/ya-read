@@ -72,4 +72,9 @@
   (test* "s-exp comment read" 'c (ex-read port))
   (test* "s-exp comment read" (eof-object) (ex-read port)))
 
+(let1 port (wrap-ex-port (open-input-string "a#|iue|#o #|ai#|ue|#o|#k"))
+  (test* "block-exp comment read" 'a (ex-read port))
+  (test* "block-exp comment read" 'o (ex-read port))
+  (test* "block-exp comment read" 'k (ex-read port))
+  (test* "block-exp comment read" (eof-object) (ex-read port)))
 

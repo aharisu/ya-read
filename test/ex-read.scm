@@ -98,3 +98,9 @@
   (test* "block-exp comment read" 'k (ex-read port))
   (test* "block-exp comment read" (eof-object) (ex-read port)))
 
+(let1 port (wrap-ex-port (open-input-string "#[abc] #[[:alnum:]] #[] #[\\]]"))
+  (test* "block-exp char-set read" #[abc] (ex-read port))
+  (test* "block-exp char-set read" #[[:alnum:]] (ex-read port))
+  (test* "block-exp char-set read" #[] (ex-read port))
+  (test* "block-exp char-set read" #[\]] (ex-read port))
+  (test* "block-exp char-est read" (eof-object) (ex-read port)))

@@ -42,6 +42,9 @@
                :line (slot-ref port 'line)
                :column (slot-ref port 'col))))
 
+(define (eof-error literal-type port)
+  (read-error #`"EOF encountered in a ,|literal-type| literal" port))
+
 (define delim-sym (gensym))
 
 (define (read-quote ctx port)
@@ -116,7 +119,7 @@
 (define (read-character ctx port)
   (let1 first-ch (read-char port)
     (if (eof-object? first-ch)
-      (read-error "EOF encountered in a character literal" port)
+      (eof-error "character" port)
       (let1 char-str (do-read-loop-no-readermacro #f ctx port (*char-kind-table*) (*reader-table*) 
                                                   (list first-ch) '())
         (*orginal-read* (open-input-string (string-append "#\\" char-str)))))))
@@ -173,6 +176,30 @@
           (loop nest-level)])))
   (values))
 
+(define (read-charset ctx port)
+  (let1 acc (open-output-string)
+    (write-char #\# acc)
+    (write-char #\[ acc)
+    (let loop ()
+      (let1 ch (read-char port)
+        (cond
+          [(eof-object? ch)
+           (eof-object? "char-set")]
+          [(char=? #\] ch) ]
+          [(or (char=? #\: ch) (char=? #\\ ch))
+           (write-char ch acc)
+           (let1 next-ch (read-char port)
+             (if (eof-object? next-ch)
+               (eof-error "char-set")
+               (begin
+                 (write-char next-ch acc)
+                 (loop))))]
+          [else
+            (write-char ch acc)
+            (loop)])))
+    (write-char #\] acc)
+    (*orginal-read* (open-input-string (get-output-string acc)))))
+
 (define *reader-table*
   (make-parameter
     (rlet1 trie (make-trie
@@ -209,6 +236,7 @@
       (trie-put! trie "#f16(" (cons-reader-macro :term (pa$ read-vector list->f16vector)))
       (trie-put! trie "#f32(" (cons-reader-macro :term (pa$ read-vector list->f32vector)))
       (trie-put! trie "#f64(" (cons-reader-macro :term (pa$ read-vector list->f64vector)))
+      (trie-put! trie "#[" (cons-reader-macro :term read-charset))
       )))
 
 ;-------------------------

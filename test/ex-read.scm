@@ -99,8 +99,16 @@
   (test* "block-exp comment read" (eof-object) (ex-read port)))
 
 (let1 port (wrap-ex-port (open-input-string "#[abc] #[[:alnum:]] #[] #[\\]]"))
-  (test* "block-exp char-set read" #[abc] (ex-read port))
-  (test* "block-exp char-set read" #[[:alnum:]] (ex-read port))
-  (test* "block-exp char-set read" #[] (ex-read port))
-  (test* "block-exp char-set read" #[\]] (ex-read port))
-  (test* "block-exp char-est read" (eof-object) (ex-read port)))
+  (test* "char-set read" #[abc] (ex-read port))
+  (test* "char-set read" #[[:alnum:]] (ex-read port))
+  (test* "char-set read" #[] (ex-read port))
+  (test* "char-set read" #[\]] (ex-read port))
+  (test* "char-est read" (eof-object) (ex-read port)))
+
+(let1 port (wrap-ex-port (open-input-string "#/a+b/ #/a.b/i #/a|b|c/ #/\\\//"))
+  (test* "regexp read" #/a+b/ (ex-read port))
+  (test* "regexp read" #/a.b/i (ex-read port))
+  (test* "regexp read" #/a|b|c/ (ex-read port))
+  (test* "regexp read" #/\// (ex-read port))
+  (test* "regexp read" (eof-object) (ex-read port)))
+

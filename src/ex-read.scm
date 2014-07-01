@@ -200,6 +200,34 @@
     (write-char #\] acc)
     (*orginal-read* (open-input-string (get-output-string acc)))))
 
+(define (read-regexp ctx port)
+  (let1 acc (open-output-string)
+    (write-char #\# acc)
+    (write-char #\/ acc)
+    (let loop ()
+      (let1 ch (read-char port)
+        (cond
+          [(eof-object? ch)
+           (eof-object? "regexp")]
+          [(char=? #\/ ch)
+           (write-char #\/ acc)
+           (let1 last-ch (read-char port)
+             (if (eq? #\i last-ch)
+               (write-char #\i acc)
+               (ungetc last-ch port)))]
+          [(char=? #\\ ch)
+           (write-char #\\ acc)
+           (let1 next-ch (read-char port)
+             (if (eof-object? next-ch)
+               (eof-error "regexp")
+               (begin
+                 (write-char next-ch acc)
+                 (loop))))]
+          [else
+            (write-char ch acc)
+            (loop)])))
+    (*orginal-read* (open-input-string (get-output-string acc)))))
+
 (define *reader-table*
   (make-parameter
     (rlet1 trie (make-trie
@@ -237,6 +265,7 @@
       (trie-put! trie "#f32(" (cons-reader-macro :term (pa$ read-vector list->f32vector)))
       (trie-put! trie "#f64(" (cons-reader-macro :term (pa$ read-vector list->f64vector)))
       (trie-put! trie "#[" (cons-reader-macro :term read-charset))
+      (trie-put! trie "#/" (cons-reader-macro :term read-regexp))
       )))
 
 ;-------------------------

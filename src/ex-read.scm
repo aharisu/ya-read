@@ -228,6 +228,26 @@
             (loop)])))
     (*orginal-read* (open-input-string (get-output-string acc)))))
 
+(define (read-multi-escape ctx port)
+  (let1 acc (open-output-string)
+    (let loop ()
+      (let1 ch (read-char port)
+        (cond
+          [(eof-object? ch)
+           (eof-object? "multi-escape")]
+          [(char=? #\| ch) ]
+          [(char=? #\\ ch)
+           (let1 next-ch (read-char port)
+             (if (eof-object? next-ch)
+               (eof-error "multi-escape")
+               (begin
+                 (write-char next-ch acc)
+                 (loop))))]
+          [else
+            (write-char ch acc)
+            (loop)])))
+    (string->symbol (get-output-string acc))))
+
 (define *reader-table*
   (make-parameter
     (rlet1 trie (make-trie
@@ -266,6 +286,7 @@
       (trie-put! trie "#f64(" (cons-reader-macro :term (pa$ read-vector list->f64vector)))
       (trie-put! trie "#[" (cons-reader-macro :term read-charset))
       (trie-put! trie "#/" (cons-reader-macro :term read-regexp))
+      (trie-put! trie "|" (cons-reader-macro :term read-multi-escape))
       )))
 
 ;-------------------------

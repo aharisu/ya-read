@@ -114,3 +114,10 @@
   (test* "regexp read" #/\// (ex-read port))
   (test* "regexp read" (eof-object) (ex-read port)))
 
+(let1 port (wrap-ex-port (open-input-string "|aiue| |123| |:keyword| |\\#\\||"))
+  (test* "multi-escape symbol read" '|aiue| (ex-read port))
+  (test* "multi-escape symbol read" '|123| (ex-read port))
+  (test* "multi-escape symbol read" '|:keyword| (ex-read port))
+  (test* "multi-escape symbol read" '|\#\|| (ex-read port))
+  (test* "symbol read" (eof-object) (ex-read port)))
+

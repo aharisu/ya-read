@@ -520,9 +520,11 @@
     (if (char<? ch #\space)
       'illegal
       'constituent)))
-    
 
 (define (read-symbol-or-number str)
   (or
     (string->number str)
-    (string->symbol str)))
+    (if (or (zero? (string-length str))
+          (not (char=? #\: (string-ref str 0))))
+      (string->symbol str)
+      (make-keyword (substring str 1 (string-length str))))))

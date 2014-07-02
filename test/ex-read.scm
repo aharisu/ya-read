@@ -4,11 +4,13 @@
 (use ex-port)
 (use ex-read)
 
-(let1 port (wrap-ex-port (open-input-string "hoge   huga\nbar\r\nfoo"))
+(let1 port (wrap-ex-port (open-input-string "hoge   huga\nbar\r\nfoo :keyword :"))
   (test* "symbol read" 'hoge (ex-read port))
   (test* "symbol read" 'huga (ex-read port))
   (test* "symbol read" 'bar (ex-read port))
   (test* "symbol read" 'foo (ex-read port))
+  (test* "keyword read" :keyword (ex-read port))
+  (test* "keyword read" : (ex-read port))
   (test* "symbol read" (eof-object) (ex-read port)))
 
 (let1 port (wrap-ex-port (open-input-string "1 102 +2 -3 3.14 123/7 81/169 2.0e20 2-i #xFF"))

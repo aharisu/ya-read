@@ -1,11 +1,11 @@
 
-(define-module ex-port
+(define-module ya.port
   (use gauche.vport)
-  (export wrap-ex-port ungetc source-info))
+  (export wrap-ya-port ungetc source-info))
 
-(select-module ex-port)
+(select-module ya.port)
 
-(define-class <ex-virtual-input-port> (<virtual-input-port>)
+(define-class <ya-virtual-input-port> (<virtual-input-port>)
   (
    (line :init-value 1)
    (col :init-value 0)
@@ -16,12 +16,12 @@
    ))
 
 
-(define (wrap-ex-port port)
-  (letrec ([ex-port (make <ex-virtual-input-port>
-                          :getc (lambda () (ex-getc ex-port))
+(define (wrap-ya-port port)
+  (letrec ([ya-port (make <ya-virtual-input-port>
+                          :getc (lambda () (ya-getc ya-port))
                           :port port
                           )])
-    ex-port))
+    ya-port))
 
 (define (ungetc ch port)
   (unless (eof-object? ch)
@@ -37,7 +37,7 @@
           (slot-set! port 'col (- (slot-ref port 'col) 1))])
       (slot-set! port 'prev-ch (- (char->integer ch))))))
 
-(define (ex-getc port)
+(define (ya-getc port)
   (let1 ungotten (slot-ref port 'ungotten)
     (rlet1 ch (if (null? ungotten)
                 (read-char (slot-ref port 'port))

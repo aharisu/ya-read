@@ -1,11 +1,11 @@
-(define-module ex-read
+(define-module ya.read
   (use gauche.parameter)
   (use gauche.uvector)
-  (use ex-port)
-  (use ex-trie)
-  (export ex-read))
+  (use ya.port)
+  (use ya.trie)
+  (export ya-read))
 
-(select-module ex-read)
+(select-module ya.read)
 
 (define *orginal-read* read)
 
@@ -303,7 +303,7 @@
 (define (has-context ctx flag)
   (memq flag ctx))
 
-(define (ex-read :optional port)
+(define (ya-read :optional port)
   (do-read #f empty-context port))
 
 (define (do-read delim ctx port)

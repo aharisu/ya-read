@@ -1,8 +1,8 @@
-(define-module ex-trie
+(define-module ya.trie
   (extend util.trie)
   (export trie-common-prefix-continuation))
 
-(select-module ex-trie)
+(select-module ya.trie)
 
 (define (%trie-get-node-from-elt trie elt)
   (and-let* ([table (%node-table (slot-ref trie 'root))])

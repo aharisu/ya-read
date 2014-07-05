@@ -76,6 +76,12 @@
   (test* "string read" #*"@あ" (ya-read port))
   (test* "string read" (eof-object) (ya-read port)))
 
+(let1 port (wrap-ya-port (open-input-string "#`\"abc\" #`\"ab ,(+ 1 2)\" #`\a"))
+  (test* "string interpolate read" '#`"abc" (ya-read port))
+  (test* "string interpolate read" '#`"ab ,(+ 1 2)" (ya-read port))
+  (test* "string interpolate read" (test-error) (ya-read port))
+  (test* "string interpolate read" (eof-object) (ya-read port)))
+
 (let1 port (wrap-ya-port (open-input-string "#\\a #\\; #\\newline #\\tab #\\x0A #\\u3042"))
   (test* "char read" #\a (ya-read port))
   (test* "char read" #\; (ya-read port))

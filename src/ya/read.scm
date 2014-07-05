@@ -79,7 +79,7 @@
            (cond
              [(eof-object? last-ch)
               (read-error "unexpected end-of-file while reading a list" port)]
-             [(eq? last-ch delim-sym)
+             [(eq? last-ch closer)
               (read-error "bad dot syntax" port)]
              [else
                (let1 close-ch (do-read closer ctx port)

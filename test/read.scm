@@ -121,3 +121,11 @@
   (test* "multi-escape symbol read" '|\#\|| (ya-read port))
   (test* "symbol read" (eof-object) (ya-read port)))
 
+
+(test* "hash-bang read" :shebang
+  (ya-read (wrap-ya-port (open-input-string "#!/shebang\n:shebang"))))
+(test* "hash-bang read" :space-shebang
+  (ya-read (wrap-ya-port (open-input-string "#! shebang\n:space-shebang"))))
+(test* "hash-bang read" (undefined)
+  (ya-read (wrap-ya-port (open-input-string "#! shebang\n#!hash-bang"))))
+

@@ -248,6 +248,43 @@
             (loop)])))
     (string->symbol (get-output-string acc))))
 
+(define (read-word ctx port)
+  (let ([acc (open-output-string)]
+        [kind-table (*char-kind-table*)])
+    (let loop ()
+      (let1 ch (read-char port)
+        (unless (eof-object? ch)
+          (case (char-kind ch kind-table)
+            [(constituent)
+             (write-char ch acc)
+             (loop)]
+            [(whitespace) ]
+            [(illegal)
+             (error "todo illegal")]))))
+    (get-output-string acc)))
+
+(define (read-hash-bang ctx port)
+  (if (or
+        ;; start with has-bang-slash?
+        (and
+          (= (slot-ref port 'line) 1)
+          (= (slot-ref port 'col) 2)
+          (let1 ch (read-char port)
+            (if (char=? ch #\/)
+              #t
+              (begin
+                (ungetc ch port)
+                #f))))
+        ;;start with hash-bang-space?
+        (and
+          (= (slot-ref port 'line) 1)
+          (= (slot-ref port 'col) 3)))
+    (read-line-comment ctx port)
+    (begin
+      ;;TODO handling reader directive
+      (read-word ctx port)
+      (undefined))))
+
 (define *reader-table*
   (make-parameter
     (rlet1 trie (make-trie
@@ -287,6 +324,7 @@
       (trie-put! trie "#[" (cons-reader-macro :term read-charset))
       (trie-put! trie "#/" (cons-reader-macro :term read-regexp))
       (trie-put! trie "|" (cons-reader-macro :term read-multi-escape))
+      (trie-put! trie "#!" (cons-reader-macro :term read-hash-bang))
       )))
 
 ;-------------------------

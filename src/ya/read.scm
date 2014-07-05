@@ -416,7 +416,7 @@
                                 pending-chars
                                 )]
           [(whitespace)
-           (do-read-end ctx port buffer pending-chars candidate-reader-macro term-macro-candidates)]
+           (do-read-end ctx port buffer (cons ch pending-chars) candidate-reader-macro term-macro-candidates)]
           [(illegal)
            (error "todo illegal")])])))
 
@@ -507,7 +507,7 @@
                [else
                  (values reader-macro (cons ch pending-chars))]))]
           [(whitespace)
-           (values reader-macro pending-chars)]
+           (values reader-macro (cons ch pending-chars))]
           [(illegal)
            (error "todo illegal")])])))
 

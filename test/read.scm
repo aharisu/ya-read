@@ -97,7 +97,8 @@
   (test* "bool read" '|aiu#t#f| (ya-read port))
   (test* "bool read" (eof-object) (ya-read port)))
 
-(let1 port (wrap-ya-port (open-input-string "a;bcd\n a ;bc\r a;\r\n a;"))
+(let1 port (wrap-ya-port (open-input-string "a;bcd\n a ;bc\r a;\r\n a;\na"))
+  (test* "line comment read" 'a (ya-read port))
   (test* "line comment read" 'a (ya-read port))
   (test* "line comment read" 'a (ya-read port))
   (test* "line comment read" 'a (ya-read port))

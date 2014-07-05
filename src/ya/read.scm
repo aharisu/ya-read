@@ -152,7 +152,7 @@
       [(or (eof-object? ch) (char=? ch #\newline)) ]
       [(char=? ch #\return)
        (let1 next-ch (read-char port)
-         (if (not (or (eof-object? ch) (char=? #\newline ch)))
+         (if (not (or (eof-object? next-ch) (char=? #\newline next-ch)))
            (ungetc next-ch port)))]
       [else (loop (read-char port))]))
   ;;no value

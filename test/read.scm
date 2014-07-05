@@ -32,6 +32,15 @@
   (test* "quote read" ''ef (ya-read port))
   (test* "quote read" (eof-object) (ya-read port)))
 
+(let1 port (wrap-ya-port (open-input-string "`(a b c) `a(b c) `(a b ,c) `(a b ,c ,@d) `[a b ,@c]"))
+  (test* "quasiquote read" '`(a b c) (ya-read port))
+  (test* "quasiquote read" '`a (ya-read port))
+  (test* "quasiquote read" '(b c) (ya-read port))
+  (test* "quasiquote read" '`(a b ,c) (ya-read port))
+  (test* "quasiquote read" '`(a b ,c ,@d) (ya-read port))
+  (test* "quasiquote read" '`[a b ,@c] (ya-read port))
+  (test* "quasiquote read" (eof-object) (ya-read port)))
+
 (let1 port (wrap-ya-port (open-input-string "(a b c) a(b c)d (a b . c) (a b . c d) [a b c] ]"))
   (test* "list read" '(a b c) (ya-read port))
   (test* "list read" 'a (ya-read port))

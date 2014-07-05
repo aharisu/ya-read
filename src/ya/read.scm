@@ -50,6 +50,15 @@
 (define (read-quote ctx port)
   (list 'quote (do-read #f ctx port)))
 
+(define (read-quasiquote ctx port)
+  (list 'quasiquote (do-read #f ctx port)))
+
+(define (read-unquote ctx port)
+  (list 'unquote (do-read #f ctx port)))
+
+(define (read-unquote-splicing ctx port)
+  (list 'unquote-splicing (do-read #f ctx port)))
+
 (define (read-close-paren ctx port)
   (read-error "unexpected close paren ')'" port))
 
@@ -298,6 +307,9 @@
                     (fold (lambda (node acc) (f (car node) (cdr node) acc)) s t))
                   )
       (trie-put! trie "'" (cons-reader-macro :term read-quote))
+      (trie-put! trie "`" (cons-reader-macro :term read-quasiquote))
+      (trie-put! trie "," (cons-reader-macro :term read-unquote))
+      (trie-put! trie ",@" (cons-reader-macro :term read-unquote-splicing))
       (trie-put! trie "(" (cons-reader-macro :term (pa$ read-list #\))))
       (trie-put! trie ")" (cons-reader-macro :term read-close-paren))
       (trie-put! trie "[" (cons-reader-macro :term (pa$ read-list #\])))

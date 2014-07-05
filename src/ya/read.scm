@@ -280,21 +280,16 @@
     (get-output-string acc)))
 
 (define (read-hash-bang ctx port)
-  (if (or
-        ;; start with has-bang-slash?
-        (and
-          (= (slot-ref port 'line) 1)
-          (= (slot-ref port 'col) 2)
-          (let1 ch (read-char port)
-            (if (char=? ch #\/)
-              #t
-              (begin
-                (ungetc ch port)
-                #f))))
-        ;;start with hash-bang-space?
-        (and
-          (= (slot-ref port 'line) 1)
-          (= (slot-ref port 'col) 3)))
+  (if (and
+        (= (slot-ref port 'line) 1)
+        (= (slot-ref port 'col) 2)
+        (let1 ch (read-char port)
+          (or 
+            (char=? ch #\/)
+            (char=? ch #\space)
+            (begin
+              (ungetc ch port)
+              #f))))
     (read-line-comment ctx port)
     (begin
       ;;TODO handling reader directive

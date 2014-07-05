@@ -374,10 +374,7 @@
        (let1 macro-result (values->list ((get-reader-macro-fun result) ctx port))
          (if (null? macro-result)
            (do-read delim ctx port)
-           (car macro-result)))]
-      [else
-        ;;error result format '(error-msg)
-        (read-error (car result) port)])))
+           (car macro-result)))])))
 
 (define (do-read-first delim ctx port kind-table reader-table)
   (let1 ch (read-char port)

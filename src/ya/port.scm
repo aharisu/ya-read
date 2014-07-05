@@ -1,7 +1,7 @@
 
 (define-module ya.port
   (use gauche.vport)
-  (export wrap-ya-port ungetc source-info))
+  (export wrap-ya-port ya-wraped-port? ungetc source-info))
 
 (select-module ya.port)
 
@@ -15,13 +15,15 @@
    (port :init-keyword :port)
    ))
 
-
 (define (wrap-ya-port port)
   (letrec ([ya-port (make <ya-virtual-input-port>
                           :getc (lambda () (ya-getc ya-port))
                           :port port
                           )])
     ya-port))
+
+(define (ya-wraped-port? port)
+  (is-a? port <ya-virtual-input-port>))
 
 (define (ungetc ch port)
   (unless (eof-object? ch)

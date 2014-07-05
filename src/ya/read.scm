@@ -361,8 +361,10 @@
 (define (has-context ctx flag)
   (memq flag ctx))
 
-(define (ya-read :optional port)
-  (do-read #f empty-context port))
+(define (ya-read :optional (port (current-input-port)))
+  (if (ya-wraped-port? port)
+    (do-read #f empty-context port)
+    (*orginal-read* port)))
 
 (define (do-read delim ctx port)
   (let1 result (do-read-first delim ctx port (*char-kind-table*) (*reader-table*))

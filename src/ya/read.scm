@@ -126,11 +126,15 @@
             (loop)])))
     (*orginal-read* (open-input-string (get-output-string str-acc)))))
 
-(define (read-string-interpolate ctx port)
+(define (read-string-interpolate legacy? ctx port)
   (let1 sexp (do-read #f ctx port)
     (if (eof-object? sexp)
       (eof-error "string-interpolate" port)
-      (string-interpolate sexp))))
+      (string-interpolate sexp legacy?))))
+
+(define (read-string-interpolate-newer ctx port)
+  (ungetc #\" port)
+  (read-string-interpolate #f ctx port))
 
 (define (read-character ctx port)
   (let1 first-ch (read-char port)
@@ -324,7 +328,8 @@
       (trie-put! trie "]" (cons-reader-macro :term read-close-bracket))
       (trie-put! trie "\"" (cons-reader-macro :term (pa$ read-string #f)))
       (trie-put! trie "#*\"" (cons-reader-macro :term (pa$ read-string #t)))
-      (trie-put! trie "#`" (cons-reader-macro :term read-string-interpolate))
+      (trie-put! trie "#`" (cons-reader-macro :term (pa$ read-string-interpolate #t)))
+      (trie-put! trie "#\"" (cons-reader-macro :term read-string-interpolate-newer))
       (trie-put! trie "#t" (cons-reader-macro :non-term read-true))
       (trie-put! trie "#f" (cons-reader-macro :non-term read-false))
       (trie-put! trie ";" (cons-reader-macro :term read-line-comment))

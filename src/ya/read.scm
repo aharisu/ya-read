@@ -197,24 +197,29 @@
   (let1 acc (open-output-string)
     (write-char #\# acc)
     (write-char #\[ acc)
-    (let loop ()
+    (let loop ([nest 0])
       (let1 ch (read-char port)
         (cond
           [(eof-object? ch)
            (eof-object? "char-set")]
-          [(char=? #\] ch) ]
-          [(or (char=? #\: ch) (char=? #\\ ch))
-           (write-char ch acc)
+          [(char=? #\] ch)
+           (write-char #\] acc)
+           (unless (zero? nest) 
+             (loop (- nest 1)))]
+          [(char=? #\[ ch)
+           (write-char #\[ acc)
+           (loop (+ nest 1))]
+          [(char=? #\\ ch)
+           (write-char #\\ acc)
            (let1 next-ch (read-char port)
              (if (eof-object? next-ch)
                (eof-error "char-set")
                (begin
                  (write-char next-ch acc)
-                 (loop))))]
+                 (loop nest))))]
           [else
             (write-char ch acc)
-            (loop)])))
-    (write-char #\] acc)
+            (loop nest)])))
     (*orginal-read* (open-input-string (get-output-string acc)))))
 
 (define (read-regexp ctx port)

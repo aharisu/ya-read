@@ -178,7 +178,7 @@
           (if (char=? ch (car char-list))
             (match-test-loop (cdr char-list) (cons ch pending-chars))
             (begin
-              (for-each (cut ungetc <> port) pending-chars)
+              (for-each (cut ungetc <> port) (cons ch pending-chars))
               #f))))))
   (let loop ([nest-level 1])
     (let1 ch (read-char port)

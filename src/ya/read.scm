@@ -4,7 +4,10 @@
   (use gauche.interpolate)
   (use ya.port)
   (use ya.trie)
-  (export ya-read))
+  (export ya-read
+    add-ya-read-after-hook
+    add-each-ya-read-after-hook
+    ))
 
 (select-module ya.read)
 
@@ -367,16 +370,35 @@
 (define (has-context ctx flag)
   (memq flag ctx))
 
+(define *read-after-hook* '())
+(define *each-read-after-hook* '())
+
+(define (add-ya-read-after-hook hook-proc)
+  (set! *read-after-hook* (cons hook-proc *read-after-hook*)))
+
+(define (add-each-ya-read-after-hook hook-proc)
+  (set! *each-read-after-hook* (cons hook-proc *each-read-after-hook*)))
+
 (define (ya-read :optional (port (current-input-port)))
   (if (ya-wraped-port? port)
-    (do-read #f empty-context port)
+    (let1 exp (do-read #f empty-context port)
+      (if (eof-object? exp)
+        exp
+        (fold
+          (lambda (hook-proc exp) (hook-proc exp)) 
+          exp
+          *read-after-hook*)))
     (*orginal-read* port)))
 
 (define (do-read-after sexp src-info)
-  (if (and (pair? sexp) src-info)
-    (rlet1 ex-pair ((with-module gauche.internal extended-cons) (car sexp) (cdr sexp))
-      ((with-module gauche.internal pair-attribute-set!) ex-pair 'source-info src-info))
-    sexp))
+  (let1 sexp 
+    (fold
+      (lambda (hook sexp) (hook sexp src-info))
+      (if (and (pair? sexp) src-info)
+        (rlet1 ex-pair ((with-module gauche.internal extended-cons) (car sexp) (cdr sexp))
+          ((with-module gauche.internal pair-attribute-set!) ex-pair 'source-info src-info))
+        sexp)
+      *each-read-after-hook*)))
 
 (define (do-read delim ctx port)
   (let1 result (do-read-first delim ctx port (*char-kind-table*) (*reader-table*))

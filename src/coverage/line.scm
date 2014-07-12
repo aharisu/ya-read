@@ -8,7 +8,9 @@
   (use ya.port)
   (use ya.read)
   (use coverage.util)
-  (export coverage-setup coverage-finish coverage-test-execution))
+  (export coverage-setup coverage-finish
+    coverage-repot-output coverage-report-load 
+    coverage-test-execution))
 
 (select-module coverage.line)
 
@@ -25,7 +27,6 @@
     file-table
     (lambda (filename coverage-table)
       (when (file-is-readable? filename)
-        (print filename)
         (output-coverage-file filename (coverage-body filename coverage-table)))))
   ;;output coverage summary file
   (let1 summary-list (hash-table-fold
@@ -42,6 +43,39 @@
     (output-coverage-summary (sort
                                summary-list
                                (lambda (a b) (string<? (car a) (car b)))))))
+
+(define (coverage-repot-output port)
+  (display "(" port)
+  (hash-table-for-each
+    file-table
+    (lambda (filename coverage-table)
+      (when (file-is-readable? filename)
+        (display "(" port)
+        (write filename port)
+        (hash-table-for-each
+          coverage-table
+          (lambda (line count)
+            (display "(" port)
+            (write line port)
+            (display " " port)
+            (write count port)
+            (display ")" port)))
+        (display ")" port))))
+  (display ")" port))
+
+(define (coverage-report-load report)
+  (for-each
+    (lambda (file-report)
+      (let1 coverage-table (get-coverage-table (car file-report))
+        (for-each
+          (lambda (line/count)
+            (hash-table-update!
+              coverage-table
+              (car line/count)
+              (cut + (cadr line/count) <>)
+              0))
+          (cdr file-report))))
+    report))
 
 (define-constant indent-width 8)
 
@@ -96,6 +130,11 @@
 
 (define file-table (make-hash-table 'string=?))
 
+(define (get-coverage-table filename)
+  (or (hash-table-get file-table filename #f)
+    (rlet1 table (make-hash-table)
+      (hash-table-put! file-table filename table))))
+
 (define (line results filename line)
   (hash-table-update! (hash-table-get file-table filename) line (pa$ + 1))
   (apply values results))
@@ -112,10 +151,7 @@
           (if (member (to-absolute-path filename) *coverage-ignore-file-list*)
             sexp
             (begin
-              (let1 coverage-table (or (hash-table-get file-table filename #f)
-                                     (rlet1 table (make-hash-table)
-                                       (hash-table-put! file-table filename table)))
-                (hash-table-put! coverage-table line 0))
+              (hash-table-put! (get-coverage-table filename) line 0)
               `(,line. (values->list ,sexp) ,filename ,line))))
         sexp))))
 

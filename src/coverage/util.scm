@@ -5,7 +5,9 @@
   (use gauche.vm.insn)
   (use gauche.parameter)
   (use srfi-11) ;;let*-values
-  (export to-absolute-path output-coverage-file scan-expression))
+  (export to-absolute-path
+    output-coverage-file output-coverage-summary
+    scan-expression))
 
 (select-module coverage.util)
 
@@ -62,6 +64,37 @@
            :if-exists :supersede
            :if-does-not-exist :create)))
 
+(define (output-coverage-summary filename/total/cover-list)
+  (let* ([total/cover (fold
+                        (lambda (summary total/cover-acc)
+                          (cons
+                            (+ (car total/cover-acc) (cadr summary))
+                            (+ (cdr total/cover-acc) (caddr summary))))
+                        '(0 . 0)
+                        filename/total/cover-list)]
+         [body (string-join
+                 (map (lambda (summary)
+                        (let ([filename (get-coverage-filename (car summary))]
+                              [total (cadr summary)]
+                              [cover (caddr summary)])
+                          #`"<tr><td><a href=',|filename|'>,(string-drop-right filename (string-length \".COVER.html\"))</a></td><td>,(floor->exact (* (/ cover total) 100))%</td>"))
+                      filename/total/cover-list)
+                 "\n")])
+    (call-with-output-file
+      (build-path (get-coverage-directory) "index.html")
+      (pa$ display
+           #`"<!DOCTYPE HTML><html>\n\
+           <head><meta charset=\"utf-8\"><title>Coverage Summary</title></head>\n\
+           <body>\n\
+           <h1>Coverage Summary</h1>\n\
+           <h3>Total: ,(floor->exact (* (/ (cdr total/cover) (car total/cover)) 100))%</h3>\n\
+           <table><tr><th>File</th><th>Coverage %</th></tr>\n\
+           ,|body|\n\
+           </table>\n\
+           </body></html>")
+           :if-exists :supersede
+           :if-does-not-exist :create)))
+    
 (define-macro (define-enum name . syms)
   (do ((i 0 (+ i 1))
        (rest syms (cdr rest))

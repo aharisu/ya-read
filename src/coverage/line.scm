@@ -20,12 +20,28 @@
   #t)
 
 (define (coverage-finish)
+  ;;output all coverage file
   (hash-table-for-each
     file-table
     (lambda (filename coverage-table)
       (when (file-is-readable? filename)
         (print filename)
-        (output-coverage-file filename (coverage-body filename coverage-table))))))
+        (output-coverage-file filename (coverage-body filename coverage-table)))))
+  ;;output coverage summary file
+  (let1 summary-list (hash-table-fold
+                       file-table
+                       (lambda (filename coverage-table acc)
+                         (if (file-is-readable? filename)
+                           (cons 
+                             (list filename
+                                   (hash-table-num-entries coverage-table) ; total
+                                   (length (filter (.$ not zero?) (hash-table-values coverage-table)))) ;cover
+                             acc)
+                           acc))
+                       '())
+    (output-coverage-summary (sort
+                               summary-list
+                               (lambda (a b) (string<? (car a) (car b)))))))
 
 (define-constant indent-width 8)
 

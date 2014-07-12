@@ -4,11 +4,18 @@
 
 (use coverage.line)
 
+(define (usage)
+  (exit 1 "Usage:\
+          \n  gosh coverage.scm [--basedir directory-path(testing working directory)]  --tests file-path(testing load file list)\
+          \n  gosh coverage.scm [--basedir directory-path(testing working directory)]  test-file1 test-file2 ..."
+  ))
+
 (define (main args)
   (let-args (cdr args)
     ([test-file "test-file=s"]
      [test-basedir "basedir=s"]
      [tests "tests=s"]
+     [else (_ . _) (usage)]
      . rest)
     (let1 test-basedir (or test-basedir (sys-getcwd))
       (cond
@@ -16,8 +23,9 @@
           (execution-all-tests (car args) (load-tests-file tests) test-basedir)]
         [test-file
           (test-exec test-file test-basedir)]
-        [else
-          (execution-all-tests (car args) rest test-basedir)]))))
+        [(not (null? rest))
+          (execution-all-tests (car args) rest test-basedir)]
+        [else (usage)]))))
 
 (define (load-tests-file tests)
   (filter-map

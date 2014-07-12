@@ -1,10 +1,11 @@
 (define-module coverage.util
+  (use srfi-13)
   (use util.match)
   (use file.util)
   (use gauche.vm.insn)
   (use gauche.parameter)
   (use srfi-11) ;;let*-values
-  (export get-coverage-directory  output-coverage-file scan-expression))
+  (export output-coverage-file scan-expression))
 
 (select-module coverage.util)
 
@@ -12,28 +13,54 @@
   (rlet1 path (build-path (current-directory) ".coverage")
     (make-directory* path)))
 
-(define (output-coverage-file directory filename content-body)
-  (receive (direc filename ext) (decompose-path filename)
-    (let1 cover-filename (string-append filename ".COVER.html")
-      (call-with-output-file
-        (build-path directory cover-filename)
-        (pa$ display
-             #`"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2 Final//EN\">\n\
-             <html>\n\
-             <head>\n\
-             <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"/>\n\
-             <title>,|cover-filename|</title>\n\
-             </head><body style='background-color: white; color: black'>\n\
-             <pre>\n\
-             \n\
-             *************************************************\n\
-             \n\
-             ,|content-body|\n\
-             </pre>\n\
-             </body>\n\
-             </html>")
-        :if-exists :supersede
-        :if-does-not-exist :create))))
+(define (to-absolute-path filename)
+  (expand-path (simplify-path (if (relative-path? filename)
+                                (build-path (current-directory) filename)
+                                filename))))
+
+(define (split-directory directory)
+  (let loop ([directory directory]
+             [acc '()])
+    (receive (parent-directory cur-directory ext) (decompose-path directory)
+      (if (or (string=? parent-directory ".")
+            (string=? parent-directory "/"))
+        (cons cur-directory acc)
+        (loop parent-directory (cons cur-directory acc))))))
+
+(define (get-coverage-filename filename)
+  (string-append 
+    (let1 abspath (to-absolute-path filename)
+      (if-let1 load-path (find
+                           (cut string-prefix? <> abspath)
+                           (map to-absolute-path *load-path*))
+        (string-join (split-directory (substring abspath
+                                                 (string-length load-path)
+                                                 (string-length abspath)))
+                     ".")
+        filename))
+    ".COVER.html"))
+
+(define (output-coverage-file filename content-body)
+  (let1 cover-filename (get-coverage-filename filename)
+    (call-with-output-file
+      (build-path (get-coverage-directory) cover-filename)
+      (pa$ display
+           #`"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2 Final//EN\">\n\
+           <html>\n\
+           <head>\n\
+           <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"/>\n\
+           <title>,|cover-filename|</title>\n\
+           </head><body style='background-color: white; color: black'>\n\
+           <pre>\n\
+           \n\
+           *************************************************\n\
+           \n\
+           ,|content-body|\n\
+           </pre>\n\
+           </body>\n\
+           </html>")
+           :if-exists :supersede
+           :if-does-not-exist :create)))
 
 (define-macro (define-enum name . syms)
   (do ((i 0 (+ i 1))

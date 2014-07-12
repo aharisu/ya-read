@@ -20,13 +20,12 @@
   #t)
 
 (define (coverage-finish)
-  (let1 directory (get-coverage-directory)
-    (hash-table-for-each
-      file-table
-      (lambda (filename coverage-table)
-        (when (file-is-readable? filename)
-          (print filename)
-          (output-coverage-file directory filename (coverage-body filename coverage-table)))))))
+  (hash-table-for-each
+    file-table
+    (lambda (filename coverage-table)
+      (when (file-is-readable? filename)
+        (print filename)
+        (output-coverage-file filename (coverage-body filename coverage-table))))))
 
 (define-constant indent-width 8)
 

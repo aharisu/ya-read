@@ -6,25 +6,30 @@
 
 (define (usage)
   (exit 1 "Usage:\
-          \n  gosh coverage.scm [--basedir directory-path(testing working directory)]  --tests file-path(testing load file list)\
-          \n  gosh coverage.scm [--basedir directory-path(testing working directory)]  test-file1 test-file2 ..."
+          \n  gosh coverage.scm  --tests=TESTS\
+          \n  gosh coverage.scm  test-file1 test-file2 ...\
+          \n  options:\
+          \n    --tests<path>   Testing load file list.\
+          \n    --basedir<path> Testing working directory path.\
+          \n    --show-detail   Show test detail message. "
   ))
 
 (define (main args)
   (let-args (cdr args)
     ([test-file "test-file=s"]
      [test-basedir "basedir=s"]
+     [show-detail "show-detail"]
      [tests "tests=s"]
      [else (_ . _) (usage)]
      . rest)
     (let1 test-basedir (or test-basedir (sys-getcwd))
       (cond
         [tests
-          (execution-all-tests (car args) (load-tests-file tests) test-basedir)]
+          (execution-all-tests (car args) (load-tests-file tests) test-basedir show-detail)]
         [test-file
-          (test-exec test-file test-basedir)]
+          (test-exec test-file test-basedir show-detail)]
         [(not (null? rest))
-          (execution-all-tests (car args) rest test-basedir)]
+          (execution-all-tests (car args) rest test-basedir show-detail)]
         [else (usage)]))))
 
 (define (load-tests-file tests)
@@ -39,17 +44,17 @@
               line)))))
     (call-with-input-file tests port->string-list)))
 
-(define (execution-all-tests self-filename test-files test-basedir)
+(define (execution-all-tests self-filename test-files test-basedir show-detail)
   (let loop ([test-files test-files])
     (cond
       [(null? test-files)
        (coverage-finish)]
-      [(fork-test-process self-filename (car test-files) *load-path* test-basedir)
+      [(fork-test-process self-filename (car test-files) *load-path* test-basedir show-detail)
        => (lambda (ret)
             (loop (cdr test-files)))]
       [else #f])))
 
-(define (fork-test-process self-filename file load-path test-basedir)
+(define (fork-test-process self-filename file load-path test-basedir show-detail)
   (let* ([p (run-process `(gosh
                             ,@(fold-right
                                 (lambda (path acc) (cons "-I" (cons path acc)))
@@ -58,6 +63,7 @@
                             ,self-filename
                             "--test-file" ,file 
                             "--basedir" ,test-basedir
+                            ,@(if show-detail '("--show-detail") '())
                             )
                          :output :pipe
                          :wait #t
@@ -70,19 +76,19 @@
       (display (port->string out-port))
       #t)))
 
-(define (test-exec filename test-basedir)
+(define (test-exec filename test-basedir show-detail)
   (sys-chdir test-basedir)
   (coverage-setup)
-  (receive (out-port err-port)
-    (let ([out-port (open-output-string)]
-          [err-port (open-output-string)])
+  (let1 msg
+    (let ([null-port (open-output-string)]
+          [msg-port (open-output-string)])
       (with-ports
         (current-input-port)
-        out-port
-        err-port
+        (if show-detail (current-error-port) null-port)
+        msg-port
         (lambda ()
           (coverage-test-execution filename)
-          (values out-port err-port))))
+          (get-output-string msg-port))))
     (coverage-repot-output (current-output-port))
-    (display (get-output-string err-port))))
+    (display msg)))
 

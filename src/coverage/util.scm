@@ -5,7 +5,7 @@
   (use gauche.vm.insn)
   (use gauche.parameter)
   (use srfi-11) ;;let*-values
-  (export output-coverage-file scan-expression))
+  (export to-absolute-path output-coverage-file scan-expression))
 
 (select-module coverage.util)
 

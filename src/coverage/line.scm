@@ -8,7 +8,7 @@
   (use ya.port)
   (use ya.read)
   (use coverage.util)
-  (export coverage-setup coverage-finish test-output line-out))
+  (export coverage-setup coverage-finish coverage-test-execution))
 
 (select-module coverage.line)
 
@@ -43,6 +43,15 @@
               (string-append (string-pad (number->string c) (- indent-width 2)) "..| " line)])))
       (call-with-input-file filename port->string-list))
     "\n"))
+
+(define *coverage-ignore-file-list* '())
+
+(define (coverage-test-execution load-filename)
+  (if-let1 r ((with-module gauche.internal find-load-file)
+              load-filename *load-path* *load-suffixes*)
+    (set! *coverage-ignore-file-list*
+      (cons (to-absolute-path (car r)) *coverage-ignore-file-list*)))
+  (load load-filename))
 
 (define ya-load-from-port
   (let1 *original-load-from-port* load-from-port
@@ -84,10 +93,13 @@
       (if-let1 srcinfo (hash-table-get srcinfo-table src #f)
         (let ([filename (car srcinfo)]
               [line (cadr srcinfo)])
-          (let1 coverage-table (or (hash-table-get file-table filename #f)
-                                 (rlet1 table (make-hash-table)
-                                   (hash-table-put! file-table filename table)))
-            (hash-table-put! coverage-table line 0))
-          `(,line. (values->list ,sexp) ,filename ,line))
+          (if (member (to-absolute-path filename) *coverage-ignore-file-list*)
+            sexp
+            (begin
+              (let1 coverage-table (or (hash-table-get file-table filename #f)
+                                     (rlet1 table (make-hash-table)
+                                       (hash-table-put! file-table filename table)))
+                (hash-table-put! coverage-table line 0))
+              `(,line. (values->list ,sexp) ,filename ,line))))
         sexp))))
 

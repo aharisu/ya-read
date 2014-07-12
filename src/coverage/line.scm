@@ -3,6 +3,7 @@
   (use gauche.vm.insn)
   (use gauche.sequence)
   (use srfi-13)
+  (use file.util)
 
   (use ya.port)
   (use ya.read)
@@ -23,8 +24,9 @@
     (hash-table-for-each
       file-table
       (lambda (filename coverage-table)
-        (print filename)
-        (output-coverage-file directory filename (coverage-body filename coverage-table))))))
+        (when (file-is-readable? filename)
+          (print filename)
+          (output-coverage-file directory filename (coverage-body filename coverage-table)))))))
 
 (define-constant indent-width 8)
 

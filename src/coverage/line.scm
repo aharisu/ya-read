@@ -35,8 +35,8 @@
                          (if (file-is-readable? filename)
                            (cons 
                              (list filename
-                                   (hash-table-num-entries coverage-table) ; total
-                                   (length (filter (.$ not zero?) (hash-table-values coverage-table)))) ;cover
+                                   (length coverage-table) ; total
+                                   (length (filter (.$ not zero?) (map cdr coverage-table)))) ;cover
                              acc)
                            acc))
                        '())
@@ -52,29 +52,32 @@
       (when (file-is-readable? filename)
         (display "(" port)
         (write filename port)
-        (hash-table-for-each
-          coverage-table
-          (lambda (line count)
+        (for-each
+          (lambda (line.count)
             (display "(" port)
-            (write line port)
+            (write (car line.count) port)
             (display " " port)
-            (write count port)
-            (display ")" port)))
+            (write (cdr line.count) port)
+            (display ")" port))
+          coverage-table)
         (display ")" port))))
   (display ")" port))
 
 (define (coverage-report-load report)
   (for-each
     (lambda (file-report)
-      (let1 coverage-table (get-coverage-table (car file-report))
-        (for-each
-          (lambda (line/count)
-            (hash-table-update!
-              coverage-table
-              (car line/count)
-              (cut + (cadr line/count) <>)
-              0))
-          (cdr file-report))))
+      (hash-table-update!
+        file-table
+        (car file-report)
+        (lambda (coverage-table)
+          (fold
+            (lambda (line/count coverage-table)
+              (assq-set! coverage-table (car line/count)
+                         (+ (cadr line/count)
+                            (assq-ref coverage-table (car line/count) 0))))
+            coverage-table
+            (cdr file-report)))
+        '()))
     report))
 
 (define-constant indent-width 8)
@@ -83,7 +86,7 @@
   (string-join
     (map-with-index
       (lambda (idx line)
-        (let1 c (hash-table-get coverage-table (+ idx 1) #f)
+        (let1 c (assq-ref coverage-table (+ idx 1) #f)
           (cond
             [(not c)
              (string-append (make-string indent-width #\space) "| " line)]
@@ -130,13 +133,8 @@
 
 (define file-table (make-hash-table 'string=?))
 
-(define (get-coverage-table filename)
-  (or (hash-table-get file-table filename #f)
-    (rlet1 table (make-hash-table)
-      (hash-table-put! file-table filename table))))
-
-(define (line results filename line)
-  (hash-table-update! (hash-table-get file-table filename) line (pa$ + 1))
+(define (line results cell)
+  (set-cdr! cell (+ (cdr cell) 1))
   (apply values results))
 
 (define line. ((with-module gauche.internal make-identifier) 'line (current-module) '()))
@@ -150,8 +148,12 @@
               [line (cadr srcinfo)])
           (if (member (to-absolute-path filename) *coverage-ignore-file-list*)
             sexp
-            (begin
-              (hash-table-put! (get-coverage-table filename) line 0)
-              `(,line. (values->list ,sexp) ,filename ,line))))
+            (let1 cell (cons line 0)
+              (hash-table-update!
+                file-table
+                filename
+                (lambda (v) (cons cell v))
+                '())
+              `(,line. (values->list ,sexp) (quote ,cell)))))
         sexp))))
 

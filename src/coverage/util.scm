@@ -3,7 +3,6 @@
   (use util.match)
   (use file.util)
   (use gauche.vm.insn)
-  (use gauche.parameter)
   (use srfi-11) ;;let*-values
   (export to-absolute-path
     output-coverage-file output-coverage-summary
@@ -342,6 +341,8 @@
 (define define-in-module. (global-id 'define-in-module))
 (define begin. (global-id 'begin))
 (define if. (global-id 'if))
+(define or. (global-id 'or))
+(define and. (global-id 'and))
 (define dynamic-wind. (global-id 'dynamic-wind))
 (define set!. (global-id 'set!))
 (define let. (global-id 'let))
@@ -352,9 +353,6 @@
 (define lazy. (global-id 'lazy))
 (define eager (global-id 'eager))
 (define ash. (global-id 'ash))
-
-(define it. (global-id 'it (current-module)))
-(define it-update!. (global-id 'it-update! (current-module)))
 
 (define asm->proc-symbol
   (let1 tbl (let ([insn-proc-alist
@@ -573,10 +571,16 @@
                   [else src])])
         (exp-hook v src))]
      [($IF)
-      `(,if.
-        ,(rec env ($if-test iform))
-        ,(rec env ($if-then iform))
-        ,(rec env ($if-else iform)))]
+      (cond
+        [(= (iform-tag ($if-then iform)) $IT)
+         `(,or. ,(rec env ($if-test iform)) ,(rec env ($if-else iform)))]
+        [(= (iform-tag ($if-else iform)) $IT)
+         `(,and. ,(rec env ($if-test iform)) ,(rec env ($if-then iform)))]
+        [else 
+          `(,if.
+             ,(rec env ($if-test iform))
+             ,(rec env ($if-then iform))
+             ,(rec env ($if-else iform)))])]
      [($LET)
       (if (dynamic-wind? iform)
         (let1 inits ($let-inits iform)
@@ -642,8 +646,6 @@
               `(,(asm->proc-symbol code)
                  ,@(map (pa$ rec env) ($asm-args iform)))])
           ($asm-src iform)))]
-     [($IT)
-      (list it.)]
      [($CONS)
       (exp-hook
         `(cons ,(rec env ($cons-arg0 iform)) ,(rec env ($cons-arg1 iform))) ($cons-src iform))]
@@ -676,15 +678,6 @@
       )))
   (rec '() iform))
 
-(define *it-value* (make-parameter (undefined)))
-
-(define (it-update! results)
-  (*it-value* results)
-  (apply values results))
-
-(define (it)
-  (apply values (*it-value*)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Entry point
 ;;
@@ -704,8 +697,7 @@
   (let* ([iform (call/gi pass1 exp (make-cenv (call/gi vm-current-module)))]
          [translated (iform->sexp
                        iform
-                       (lambda (sexp src)
-                         (exp-hook `(,it-update!. (values->list ,sexp)) src)))])
+                       exp-hook)])
     (cond
       [(form-is-define-module? exp translated)
        `(with-module ,(cadr exp) ,translated)]

@@ -6,7 +6,9 @@
   (use srfi-11) ;;let*-values
   (export to-absolute-path
     output-coverage-file output-coverage-summary
-    scan-expression))
+    scan-expression
+    global-id
+    ))
 
 (select-module coverage.util)
 

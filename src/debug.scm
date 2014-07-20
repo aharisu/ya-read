@@ -7,9 +7,8 @@
 
 (use ya.port)
 (use ya.read)
-(use coverage.util)
+(use debug.traverse)
 (use debug.message-queue)
-
 
 (define (usage)
   (exit 1 "Usage:\

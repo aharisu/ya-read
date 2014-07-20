@@ -8,6 +8,7 @@
   (use ya.port)
   (use ya.read)
   (use coverage.util)
+  (use debug.traverse)
   (export coverage-setup coverage-finish
     coverage-repot-output coverage-report-load 
     coverage-test-execution))

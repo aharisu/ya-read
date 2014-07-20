@@ -43,10 +43,16 @@
 ;; Debug function interpolate
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(include "debug/traverse-struct.scm")
+
 (define break. (global-id 'break (current-module)))
 (define begin. (global-id 'begin))
 (define if. (global-id 'if))
 (define quote. (global-id 'quote))
+(define let. (global-id 'let))
+(define list. (global-id 'list))
+(define cons. (global-id 'cons))
+(define append. (global-id 'append))
 
 (define srcinfo-table (make-hash-table 'eq?))
 
@@ -65,9 +71,31 @@
     (hash-table-put! srcinfo-table sexp srcinfo))
   sexp)
 
+(define frame-sym (gensym "frame"))
+(define-macro (in-null-module-empty-list-definition sym)
+  `(define-in-module null ,(eval sym (current-module)) '()))
+(in-null-module-empty-list-definition frame-sym)
+
 (define (read-after toplevel-sexp)
+  (define (make-frame-let lambda? name lvars args body)
+    (let1 frame-obj (cons `(,cons. ,lambda? (,quote. ,name))
+                          (let loop ([lvars lvars]
+                                     [args (if (pair? args) args (cons args '()))]
+                                     [acc '()])
+                            (if (null? lvars)
+                              (reverse acc)
+                              (let1 args (if (pair? args) args (cons args '()))
+                                (loop (cdr lvars)
+                                      (cdr args)
+                                      (cons `(,cons. (,quote. ,(car lvars))
+                                                     ,(car args))
+                                            acc))))))
+      `(,let. ([,frame-sym (,append. (,list. ,@frame-obj) ,frame-sym)])
+              ,@body)))
+
   (scan-expression
     toplevel-sexp
+    ;;each expression hook
     (lambda (sexp src)
       (if (and (pair? sexp) script-loading?)
         (let* ([srcinfo (hash-table-get srcinfo-table src '(#f #f #f))]
@@ -75,9 +103,43 @@
                        (get-break-point-cell (car srcinfo) (cadr srcinfo))
                        (cons #f (cons #f #f)))])
           `(,begin.
-             (,break. (,quote. ,cell))
+             (,break. (,quote. ,cell) ,frame-sym)
              ,sexp))
-        sexp))))
+        sexp))
+    ;;iform hook
+    (lambda (sexp iform)
+      (let1 tag (iform-tag iform)
+        (cond
+          [(= $LAMBDA tag)
+           `(,(car sexp)
+              ,(cadr sexp)
+              ,(make-frame-let #t ($lambda-name iform)
+                               (map
+                                 (lambda (lvar) (lvar-name lvar))
+                                 ($lambda-lvars iform))
+                               (cadr sexp)
+                               (cddr sexp)))]
+          [(= $RECEIVE tag)
+           `(,(car sexp)
+              ,(cadr sexp)
+              ,(caddr sexp)
+              ,(make-frame-let #f 'receive
+                               (map
+                                 (lambda (lvar) (lvar-name lvar))
+                                 ($receive-lvars iform))
+                               (cadr sexp)
+                               (cdddr sexp)))]
+          [(= $LET tag)
+           `(,(car sexp)
+              ,(cadr sexp)
+              ,(make-frame-let #f (identifier->symbol (car sexp))
+                               (map
+                                 (lambda (lvar) (lvar-name lvar))
+                                 ($let-lvars iform))
+                               (map car (cadr sexp))
+                               (cddr sexp)))]
+          [else sexp])))
+    ))
 
 ;;;;;;;;;;;;;;;;;;;;
 ;; UI entry point
@@ -104,6 +166,8 @@
             (case (car line/or/notify)
               [(stop)
                (print "stop: " (cadr line/or/notify) ":" (caddr line/or/notify))]
+              [(show)
+               (print (cadr line/or/notify))]
               [(error)
                (print (cadr line/or/notify))]
               )
@@ -182,21 +246,24 @@
         (post msg-queue (list 'load script-file)))
       (print-err "Error: Specify a script file"))))
 
+(define (read-expression args)
+  (let* ([line (string-append (string-join args " ") " ")]
+         [index 0]
+         [inport (make <virtual-input-port>
+                       :getc (lambda ()
+                               (if (< index (string-length line))
+                                 (begin0
+                                   (string-ref line index)
+                                   (inc! index))
+                                 (read-char))))])
+    (read inport)))
+
 (define-ui-cmd
   exp
   (pa$ <= 1)
   (lambda (msg-queue . args)
-    (let* ([line (string-append (string-join args " ") " ")]
-           [index 0]
-           [inport (make <virtual-input-port>
-                         :getc (lambda ()
-                                 (if (< index (string-length line))
-                                   (begin0
-                                     (string-ref line index)
-                                     (inc! index))
-                                   (read-char))))])
-      (let1 e (read inport)
-        (post msg-queue (list 'exp e))))))
+    (let1 e (read-expression args)
+      (post msg-queue (list 'exp e)))))
 
 (define-ui-cmd
   step
@@ -215,6 +282,20 @@
   zero?
   (lambda (msg-queue . args)
     (post msg-queue '(continue))))
+
+(define (cmd-write/display post-tag msg-queue . args)
+  (let1 e (read-expression args)
+    (post msg-queue (list post-tag e))))
+
+(define-ui-cmd
+  print
+  (pa$ <= 1)
+  (pa$ cmd-write/display 'print))
+
+(define-ui-cmd
+  write
+  (pa$ <= 1)
+  (pa$ cmd-write/display 'write))
 
 ;;;;;;;;;;;;;;;;;;;;;;;
 ;; Debug entry point
@@ -258,17 +339,20 @@
             ;;exec stopped debug command
             (apply (debug-cmd-exec cmd)
                    (append (list loop
+                                 notify-queue
                                  (car break-point-info)
                                  (cadr break-point-info)
-                                 (caddr break-point-info))
+                                 (caddr break-point-info)
+                                 (cadddr break-point-info)
+                                 )
                            (cdr msg)))
             (begin
               (enqueue! notify-queue '(error "The program is not stop"))
               (loop)))
           ;;exec normal debug command
-          (apply (debug-cmd-exec cmd) (cons loop (cdr msg))))))))
+          (apply (debug-cmd-exec cmd) (append (list loop notify-queue) (cdr msg))))))))
 
-(define (break cell)
+(define (break cell frame)
   (when (let1 break? (car cell)
             (cond
               [(eq? break? #t) #t]
@@ -283,6 +367,7 @@
                               return-point
                               (cddr cell) ;filename
                               (cadr cell) ;line
+                              frame
                               ))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -303,7 +388,7 @@
 (define-debug-cmd
   load
   #f
-  (lambda (loop script-file)
+  (lambda (loop notify-queue script-file)
     (dynamic-wind
       (lambda () (set! script-loading? #t))
       (lambda () (load script-file))
@@ -313,7 +398,7 @@
 (define-debug-cmd
   exp
   #f
-  (lambda (loop e)
+  (lambda (loop notify-queue e)
     (eval e (current-module))
     (set! stop-cond #f)
     (loop)))
@@ -321,23 +406,59 @@
 (define-debug-cmd
   step
   #t
-  (lambda (loop break-continuation filename line)
+  (lambda (loop notify-queue break-continuation filename line frame)
     (set! stop-cond #t)
     (break-continuation #t)))
 
 (define-debug-cmd
   next
   #t
-  (lambda (loop break-continuation filename line)
+  (lambda (loop notify-queue break-continuation filename line frame)
     (set! stop-cond filename)
     (break-continuation #t)))
 
 (define-debug-cmd
   continue
   #t
-  (lambda (loop break-continuation filename line)
+  (lambda (loop notify-queue break-continuation filename line frame)
     (set! stop-cond #f)
     (break-continuation #t)))
+
+(define resolve-notfound-sym (gensym))
+(define (exec-watch-expression notify-queue frame show-func e)
+  (let1 e (let resolve-local-var ([e e])
+            (cond
+              [(pair? e)
+               (cons (resolve-local-var (car e)) (resolve-local-var (cdr e)))]
+              [(symbol? e)
+               (let1 val (assq-ref frame e resolve-notfound-sym) 
+                 (if (eq? val resolve-notfound-sym)
+                   e
+                   (list quote. val)))]
+              [else e]))
+    (receive (type msg)
+      (guard (err 
+               [(<message-condition> err)
+                (values 'error (slot-ref err 'message))]
+               [else
+                 (values 'error (with-output-to-string (pa$ display err)))])
+        (let1 result (eval e (current-module))
+          (values 'show (with-output-to-string (pa$ show-func result)))))
+      (enqueue! notify-queue (list type msg)))))
+
+(define-debug-cmd
+  print
+  #t
+  (lambda (loop notify-queue break-continuation filename line frame e)
+    (exec-watch-expression notify-queue frame display e)
+    (loop)))
+
+(define-debug-cmd
+  write
+  #t
+  (lambda (loop notify-queue break-continuation filename line frame e)
+    (exec-watch-expression notify-queue frame write e)
+    (loop)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;
 ;; Util

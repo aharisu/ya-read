@@ -304,7 +304,7 @@
 (define script-loading? #f)
 (define break-escape-point #f)
 
-(define stop-cond #f)
+(define stop-cond (make-parameter #f))
 
 (define break-point-table (make-hash-table 'string=?))
 
@@ -356,11 +356,14 @@
   (when (let1 break? (car cell)
             (cond
               [(eq? break? #t) #t]
-              [(not stop-cond) #f]
-               ;equal file?
-              [(string? stop-cond) ;next command
-               (equal? stop-cond (cddr cell))]
-              [else #t]))
+              [else
+                (let1 stop-cond (stop-cond)
+                  (cond
+                    [(not stop-cond) #f]
+                    ;equal file?
+                    [(string? stop-cond) ;next command
+                     (equal? stop-cond (cddr cell))]
+                    [else #t]))]))
     (call/cc
       (lambda (return-point)
         (break-escape-point (list
@@ -399,29 +402,30 @@
   exp
   #f
   (lambda (loop notify-queue e)
-    (eval e (current-module))
-    (set! stop-cond #f)
+    (let1 tmp (stop-cond)
+      (eval e (current-module))
+      (stop-cond tmp))
     (loop)))
 
 (define-debug-cmd
   step
   #t
   (lambda (loop notify-queue break-continuation filename line frame)
-    (set! stop-cond #t)
+    (stop-cond #t)
     (break-continuation #t)))
 
 (define-debug-cmd
   next
   #t
   (lambda (loop notify-queue break-continuation filename line frame)
-    (set! stop-cond filename)
+    (stop-cond filename)
     (break-continuation #t)))
 
 (define-debug-cmd
   continue
   #t
   (lambda (loop notify-queue break-continuation filename line frame)
-    (set! stop-cond #f)
+    (stop-cond #f)
     (break-continuation #t)))
 
 (define resolve-notfound-sym (gensym))

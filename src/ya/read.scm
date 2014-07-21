@@ -15,13 +15,14 @@
 
 (define *char-kind-table*
   (make-parameter
-    '((#\tab . whitespace)
-      (#\newline . whitespace)
-      (#\x0b . whitespace) ;0x0b is VT
-      (#\page . whitespace)
-      (#\return . whitespace)
-      (#\space . whitespace)
-      )))
+    (alist->hash-table
+      '((#\tab . whitespace)
+        (#\newline . whitespace)
+        (#\x0b . whitespace) ;0x0b is VT
+        (#\page . whitespace)
+        (#\return . whitespace)
+        (#\space . whitespace)
+        ))))
 
 (define cons-reader-macro cons)
 (define (reader-macro? obj)
@@ -311,16 +312,7 @@
 
 (define *reader-table*
   (make-parameter
-    (rlet1 trie (make-trie
-                  list
-                  (cut assoc-ref <> <> #f char=?)
-                  (lambda (t k v)
-                    (if v
-                      (assoc-set! t k v char=?)
-                      (alist-delete! k t char=?)))
-                  (lambda (t f s) 
-                    (fold (lambda (node acc) (f (car node) (cdr node) acc)) s t))
-                  )
+    (rlet1 trie (make-trie)
       (trie-put! trie "'" (cons-reader-macro :term read-quote))
       (trie-put! trie "`" (cons-reader-macro :term read-quasiquote))
       (trie-put! trie "," (cons-reader-macro :term read-unquote))
@@ -638,7 +630,7 @@
 
 (define (char-kind ch kind-table)
   (or
-    (assq-ref kind-table ch)
+    (hash-table-get kind-table ch #f)
     (extra-whitespace ch)
     (if (char<? ch #\space)
       'illegal

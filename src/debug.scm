@@ -297,6 +297,18 @@
   (pa$ <= 1)
   (pa$ cmd-write/display 'write))
 
+(define-ui-cmd
+  backtrace
+  (^n (or (zero? n) (= n 1)))
+  (lambda (msg-queue :optional mode)
+    (cond
+      [(undefined? mode)
+       (post msg-queue (list 'backtrace 'function))]
+      [(string=? mode "full")
+       (post msg-queue (list 'backtrace 'full))]
+      [else
+        (print-err "Error: Specify the function or full.")])))
+
 ;;;;;;;;;;;;;;;;;;;;;;;
 ;; Debug entry point
 ;;;;;;;;;;;;;;;;;;;;;;;
@@ -446,6 +458,52 @@
   (lambda (loop notify-queue break-continuation filename line frame)
     (stop-cond (list 'continue filename line))
     (break-continuation #t)))
+
+(define (frame-map proc frame)
+  (let loop ([frame frame]
+             [result-acc '()])
+    (if (null? frame) 
+      (reverse result-acc)
+      (receive (frame acc) (let frame-constract ([frame (cdr frame)]
+                                                 [acc (list (car frame))])
+                             (if (or (null? frame) (boolean? (caar frame)))
+                               (values frame (reverse acc))
+                               (frame-constract (cdr frame)
+                                                (cons (car frame) acc))))
+        (loop frame
+              (cons (proc acc) result-acc))))))
+
+(define-debug-cmd
+  backtrace
+  #t
+  (lambda (loop notify-queue break-continuation filename line frame mode)
+    (define (frame->string frame)
+      (with-output-to-string
+        (lambda ()
+          (display (or (cdar frame) "???"))
+          (display " (")
+          (display (string-join
+                     (map 
+                       (lambda (binding)
+                         (string-append
+                           (symbol->string (car binding))
+                           "="
+                           (with-output-to-string
+                             (pa$ write (cdr binding)))))
+                       (cdr frame))
+                     " "))
+          (display ")"))))
+    (let1 frame-str-list (filter
+                           identity
+                           (let1 all? (eq? mode 'full)
+                             (frame-map
+                               (lambda (f)
+                                 (if (or all? (caar f))
+                                   (frame->string f)
+                                   #f))
+                               frame)))
+      (enqueue! notify-queue (list 'show (string-join frame-str-list "\n"))))
+    (loop)))
 
 (define resolve-notfound-sym (gensym))
 (define (exec-watch-expression notify-queue frame show-func e)

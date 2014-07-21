@@ -352,18 +352,37 @@
           ;;exec normal debug command
           (apply (debug-cmd-exec cmd) (append (list loop notify-queue) (cdr msg))))))))
 
+(define (check-break-point-cell cell frame)
+  (let1 break? (car cell)
+    (cond
+      [(eq? break? #t) #t]
+      [else #f])))
+
+(define (current-functionname frame)
+  (assq-ref frame #t 'top-level))
+
 (define (break cell frame)
-  (when (let1 break? (car cell)
-            (cond
-              [(eq? break? #t) #t]
-              [else
-                (let1 stop-cond (stop-cond)
-                  (cond
-                    [(not stop-cond) #f]
-                    ;equal file?
-                    [(string? stop-cond) ;next command
-                     (equal? stop-cond (cddr cell))]
-                    [else #t]))]))
+  (when (if-let1 stop-cond (stop-cond)
+          ;;position has not changed
+          (if (and
+                (= (cadr cell) (caddr stop-cond)) ;in the same line?
+                (string=? (cddr cell) (cadr stop-cond))) ;and, in the same file?
+            #f ; continue to run.
+            (or
+              (case (car stop-cond)
+                [(step)
+                 ;;always stop if the position has changed.
+                 #t]
+                [(next)
+                 ;;stop when it if both have the same function.
+                 (eq? (current-functionname frame) (cadddr stop-cond))]
+                [(continue) 
+                 ;;always continue if the position has changed.
+                 #f])
+              ;;if not the case in the stop condition, check current break point cell.
+              (check-break-point-cell cell frame)))
+          ;;if no stop condition, check current break point cell.
+          (check-break-point-cell cell frame))
     (call/cc
       (lambda (return-point)
         (break-escape-point (list
@@ -411,21 +430,21 @@
   step
   #t
   (lambda (loop notify-queue break-continuation filename line frame)
-    (stop-cond #t)
+    (stop-cond (list 'step filename line))
     (break-continuation #t)))
 
 (define-debug-cmd
   next
   #t
   (lambda (loop notify-queue break-continuation filename line frame)
-    (stop-cond filename)
+    (stop-cond (list 'next filename line (current-functionname frame)))
     (break-continuation #t)))
 
 (define-debug-cmd
   continue
   #t
   (lambda (loop notify-queue break-continuation filename line frame)
-    (stop-cond #f)
+    (stop-cond (list 'continue filename line))
     (break-continuation #t)))
 
 (define resolve-notfound-sym (gensym))

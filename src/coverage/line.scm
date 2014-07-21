@@ -134,11 +134,12 @@
 
 (define file-table (make-hash-table 'string=?))
 
-(define (line results cell)
-  (set-cdr! cell (+ (cdr cell) 1))
-  (apply values results))
+(define (line cell)
+  (set-cdr! cell (+ 1 (cdr cell))))
 
-(define line. ((with-module gauche.internal make-identifier) 'line (current-module) '()))
+(define begin. (global-id 'begin))
+(define quote. (global-id 'quote))
+(define line. (global-id 'line (current-module)))
 
 (define (read-after toplevel-sexp)
   (scan-expression
@@ -155,7 +156,9 @@
                 filename
                 (lambda (v) (cons cell v))
                 '())
-              `(,line. (values->list ,sexp) (quote ,cell)))))
+              `(,begin.
+                 (,line. (,quote. ,cell))
+                 ,sexp))))
         sexp))
     (lambda (sexp iform)
       sexp)

@@ -259,11 +259,11 @@
     (read inport)))
 
 (define-ui-cmd
-  exp
+  exec
   (pa$ <= 1)
   (lambda (msg-queue . args)
     (let1 e (read-expression args)
-      (post msg-queue (list 'exp e)))))
+      (post msg-queue (list 'exec e)))))
 
 (define-ui-cmd
   step
@@ -418,7 +418,7 @@
     (loop)))
 
 (define-debug-cmd
-  exp
+  exec
   #f
   (lambda (loop notify-queue e)
     (let1 tmp (stop-cond)

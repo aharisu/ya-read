@@ -16,6 +16,7 @@
    
 (define define. (global-id 'define))
 (define define-constant. (global-id 'define-constant))
+(define define-inline. (global-id 'define-inline))
 (define define-in-module. (global-id 'define-in-module))
 (define begin. (global-id 'begin))
 (define if. (global-id 'if))
@@ -179,7 +180,10 @@
       (case/unquote
         (iform-tag iform)
         [($DEFINE)
-         (let1 translated `(,(if (memq 'const ($define-flags iform)) define-constant. define.)
+         (let1 translated `(,(cond
+                               [(memq 'const ($define-flags iform)) define-constant.]
+                               [(memq 'inlinable ($define-flags iform)) define-inline.]
+                               [else define.])
                              ,(identifier->symbol ($define-id iform))
                              ,(rec env ($define-expr iform)))
            (if (form-is-define-in-module? ($define-src iform) translated)
@@ -190,7 +194,7 @@
            (resolve-local-var ($lref-lvar iform) env)
            (lvar-name ($lref-lvar iform)))]
         [($LSET)
-         `(set!
+         `(,set!.
             ,(resolve-local-var ($lset-lvar iform) env)
             ,(rec env ($lset-expr iform)))]
         [($GREF)

@@ -400,8 +400,8 @@
   (when (if-let1 stop-cond (stop-cond)
           ;;position has not changed
           (if (and
-                (= (cadr cell) (caddr stop-cond)) ;in the same line?
-                (string=? (cddr cell) (cadr stop-cond))) ;and, in the same file?
+                (eq? (cadr cell) (caddr stop-cond)) ;in the same line?
+                (equal? (cddr cell) (cadr stop-cond))) ;and, in the same file?
             #f ; continue to run.
             (or
               (case (car stop-cond)

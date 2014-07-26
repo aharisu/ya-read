@@ -15,33 +15,14 @@
           \n  gosh debug.scm gauche-script-file"
   ))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Debug function interpolate
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (define ya-load-from-port
   (let1 *original-load-from-port* load-from-port
     (lambda (port . args)
       (apply *original-load-from-port* (cons (wrap-ya-port port) args)))))
-
-(define (setup)
-  (set! load-from-port ya-load-from-port)
-  (set! read ya-read)
-  (add-ya-read-after-hook read-after)
-  (add-each-ya-read-after-hook each-read-after)
-  #t)
-
-(define default-script-file #f)
-
-(define (main args)
-  (let-args (cdr args)
-    ([else (_ . _) (usage)]
-     . rest)
-    (unless (null? rest)
-      (set! default-script-file (car rest)))
-    (setup)
-    (user-interface-entry-point)
-    0))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Debug function interpolate
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (include "debug/traverse-struct.scm")
 
@@ -98,7 +79,7 @@
     toplevel-sexp
     ;;each expression hook
     (lambda (sexp src)
-      (if (and (pair? sexp) script-loading?)
+      (if (pair? sexp)
         (let* ([srcinfo (hash-table-get srcinfo-table src '(#f #f #f))]
                [cell (if (and (car srcinfo) (cadr srcinfo))
                        (get-break-point-cell (car srcinfo) (cadr srcinfo))
@@ -142,6 +123,46 @@
                                (cddr sexp)))]
           [else sexp])))
     ))
+
+(define (reload-used-module)
+  (let1 modules (make-hash-table)
+    (for-each
+      (lambda (pattern)
+        (library-for-each
+          pattern
+          (lambda (name path)
+            (hash-table-put! modules name path))))
+      '(* *.* *.*.* ))
+    (for-each
+      (lambda (m)
+        (let1 name (module-name m)
+          (unless (member (car (string-split (symbol->string name) #\.))
+                          '("ya" "debug")
+                          string=?)
+            (if-let1 path (hash-table-get modules name #f)
+              (load path)))))
+      (all-modules))))
+
+(define (setup)
+  (set! load-from-port ya-load-from-port)
+  (set! read ya-read)
+  (add-ya-read-after-hook read-after)
+  (add-each-ya-read-after-hook each-read-after)
+  (reload-used-module)
+  #t)
+
+(define default-script-file #f)
+
+(define (main args)
+  (let-args (cdr args)
+    ([else (_ . _) (usage)]
+     . rest)
+    (unless (null? rest)
+      (set! default-script-file (car rest)))
+    (setup)
+    (user-interface-entry-point)
+    0))
+
 
 ;;;;;;;;;;;;;;;;;;;;
 ;; UI entry point
@@ -439,8 +460,8 @@
         (lambda ()
           (eval e (current-module)))
         (lambda ()
-          (stop-cond #f))))
-    (loop))
+          (stop-cond #f)))
+      (loop)))
 
 (define-debug-cmd
   step

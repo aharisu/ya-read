@@ -315,10 +315,10 @@
 ;; Debug entry point
 ;;;;;;;;;;;;;;;;;;;;;;;
 
-(define script-loading? #f)
 (define break-escape-point #f)
 
 (define stop-cond (make-parameter #f))
+(define stop-cond-temp #f)
 
 (define break-point-table (make-hash-table 'string=?))
 
@@ -425,40 +425,42 @@
   load
   #f
   (lambda (loop notify-queue script-file)
-    (dynamic-wind
-      (lambda () (set! script-loading? #t))
-      (lambda () (load script-file))
-      (lambda () (set! script-loading? #f)))
+    (load script-file)
     (loop)))
 
 (define-debug-cmd
   exec
   #f
   (lambda (loop notify-queue e)
-    (let1 tmp (stop-cond)
-      (eval e (current-module))
-      (stop-cond tmp))
-    (loop)))
+      (dynamic-wind
+        (lambda ()
+          (stop-cond stop-cond-temp)
+          (set! stop-cond-temp #f))
+        (lambda ()
+          (eval e (current-module)))
+        (lambda ()
+          (stop-cond #f))))
+    (loop))
 
 (define-debug-cmd
   step
   #t
   (lambda (loop notify-queue break-continuation filename line frame)
-    (stop-cond (list 'step filename line))
+    (set! stop-cond-temp (list 'step filename line))
     (break-continuation #t)))
 
 (define-debug-cmd
   next
   #t
   (lambda (loop notify-queue break-continuation filename line frame)
-    (stop-cond (list 'next filename line (current-functionname frame)))
+    (set! stop-cond-temp (list 'next filename line (current-functionname frame)))
     (break-continuation #t)))
 
 (define-debug-cmd
   continue
   #t
   (lambda (loop notify-queue break-continuation filename line frame)
-    (stop-cond (list 'continue filename line))
+    (set! stop-cond-temp (list 'continue filename line))
     (break-continuation #t)))
 
 (define (frame-map proc frame)

@@ -53,6 +53,7 @@
 (define list. (global-id 'list))
 (define cons. (global-id 'cons))
 (define append. (global-id 'append))
+(define dynamic-wind. (global-id 'dynamic-wind))
 
 (define srcinfo-table (make-hash-table 'eq?))
 
@@ -129,7 +130,8 @@
                                  ($receive-lvars iform))
                                (cadr sexp)
                                (cdddr sexp)))]
-          [(= $LET tag)
+          [(and (= $LET tag)
+             (not (equal? (car sexp) dynamic-wind.)))
            `(,(car sexp)
               ,(cadr sexp)
               ,(make-frame-let #f (identifier->symbol (car sexp))

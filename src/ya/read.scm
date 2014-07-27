@@ -2,6 +2,7 @@
   (use gauche.parameter)
   (use gauche.uvector)
   (use gauche.interpolate)
+  (use srfi-14)
   (use ya.port)
   (use ya.trie)
   (export ya-read
@@ -15,14 +16,8 @@
 
 (define *char-kind-table*
   (make-parameter
-    (alist->hash-table
-      '((#\tab . whitespace)
-        (#\newline . whitespace)
-        (#\x0b . whitespace) ;0x0b is VT
-        (#\page . whitespace)
-        (#\return . whitespace)
-        (#\space . whitespace)
-        ))))
+    (list
+      (cons char-set:whitespace 'whitespace))))
 
 (define cons-reader-macro cons)
 (define (reader-macro? obj)
@@ -610,28 +605,19 @@
         (list->string (reverse buffer)))
       src-info)))
 
-(define (extra-whitespace ch)
-  (cond
-    [(char<? #\x3000 ch) #f]
-    [(char<? ch #\x2000)
-     (if (or (char=? ch  #\x00A0)
-           (char=? ch #\x1680)
-           (char=? ch #\x180E))
-       'whitespace
-       #f)]
-    [(char<=? ch #\x200A) ; 16#2000 ... 16#200A are all Zs's
-     'whitespace]
-    [else
-      (if (or (char=? ch #\x3000)  ; Zs NO-BREAK SPACE
-            (char=? ch #\x202F)    ; Zs OGHAM SPACE MARK
-            (char=? ch #\x205F))   ; Zs MONGOLIAN VOWEL SEPARATOR
-        'whitespace
-        #f)]))
-
 (define (char-kind ch kind-table)
   (or
-    (hash-table-get kind-table ch #f)
-    (extra-whitespace ch)
+    (any
+      (lambda (kind-spec)
+        (let1 spec (car kind-spec)
+          (if (char-set? spec)
+            (if (char-set-contains? spec ch)
+              (cdr kind-spec)
+              #f)
+            (if (char=? spec ch)
+              (cdr kind-spec)
+              #f))))
+      kind-table)
     (if (char<? ch #\space)
       'illegal
       'constituent)))

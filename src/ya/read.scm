@@ -22,7 +22,7 @@
 (define cons-reader-macro cons)
 (define (reader-macro? obj)
   (and (pair? obj)
-    (memq (get-reader-macro-type obj) '(:term :right-term :non-term))))
+    (memq (get-reader-macro-type obj) '(term right-term non-term))))
 
 (define get-reader-macro-type car)
 (define get-reader-macro-fun cdr)
@@ -304,39 +304,39 @@
 (define *reader-table*
   (make-parameter
     (rlet1 trie (make-trie)
-      (trie-put! trie "'" (cons-reader-macro :term read-quote))
-      (trie-put! trie "`" (cons-reader-macro :term read-quasiquote))
-      (trie-put! trie "," (cons-reader-macro :term read-unquote))
-      (trie-put! trie ",@" (cons-reader-macro :term read-unquote-splicing))
-      (trie-put! trie "(" (cons-reader-macro :term (pa$ read-list #\))))
-      (trie-put! trie ")" (cons-reader-macro :term read-close-paren))
-      (trie-put! trie "[" (cons-reader-macro :term (pa$ read-list #\])))
-      (trie-put! trie "]" (cons-reader-macro :term read-close-bracket))
-      (trie-put! trie "\"" (cons-reader-macro :term (pa$ read-string #f)))
-      (trie-put! trie "#*\"" (cons-reader-macro :right-term (pa$ read-string #t)))
-      (trie-put! trie "#`" (cons-reader-macro :right-term (pa$ read-string-interpolate #t)))
-      (trie-put! trie "#\"" (cons-reader-macro :right-term read-string-interpolate-newer))
-      (trie-put! trie "#t" (cons-reader-macro :non-term read-true))
-      (trie-put! trie "#f" (cons-reader-macro :non-term read-false))
-      (trie-put! trie ";" (cons-reader-macro :term read-line-comment))
-      (trie-put! trie "#;" (cons-reader-macro :right-term read-sexp-comment))
-      (trie-put! trie "#|" (cons-reader-macro :right-term (pa$ read-block-comment '(#\# #\|) '(#\| #\#))))
-      (trie-put! trie "#\\" (cons-reader-macro :right-term read-character))
-      (trie-put! trie "#(" (cons-reader-macro :right-term (pa$ read-vector list->vector)))
-      (trie-put! trie "#u8(" (cons-reader-macro :right-term (pa$ read-vector list->u8vector)))
-      (trie-put! trie "#u16(" (cons-reader-macro :right-term (pa$ read-vector list->u16vector)))
-      (trie-put! trie "#u32(" (cons-reader-macro :right-term (pa$ read-vector list->u32vector)))
-      (trie-put! trie "#u64(" (cons-reader-macro :right-term (pa$ read-vector list->u64vector)))
-      (trie-put! trie "#s16(" (cons-reader-macro :right-term (pa$ read-vector list->s16vector)))
-      (trie-put! trie "#s32(" (cons-reader-macro :right-term (pa$ read-vector list->s32vector)))
-      (trie-put! trie "#s64(" (cons-reader-macro :right-term (pa$ read-vector list->s64vector)))
-      (trie-put! trie "#f16(" (cons-reader-macro :right-term (pa$ read-vector list->f16vector)))
-      (trie-put! trie "#f32(" (cons-reader-macro :right-term (pa$ read-vector list->f32vector)))
-      (trie-put! trie "#f64(" (cons-reader-macro :right-term (pa$ read-vector list->f64vector)))
-      (trie-put! trie "#[" (cons-reader-macro :right-term read-charset))
-      (trie-put! trie "#/" (cons-reader-macro :right-term read-regexp))
-      (trie-put! trie "|" (cons-reader-macro :term read-multi-escape))
-      (trie-put! trie "#!" (cons-reader-macro :right-term read-hash-bang))
+      (trie-put! trie "'" (cons-reader-macro 'term read-quote))
+      (trie-put! trie "`" (cons-reader-macro 'term read-quasiquote))
+      (trie-put! trie "," (cons-reader-macro 'term read-unquote))
+      (trie-put! trie ",@" (cons-reader-macro 'term read-unquote-splicing))
+      (trie-put! trie "(" (cons-reader-macro 'term (pa$ read-list #\))))
+      (trie-put! trie ")" (cons-reader-macro 'term read-close-paren))
+      (trie-put! trie "[" (cons-reader-macro 'term (pa$ read-list #\])))
+      (trie-put! trie "]" (cons-reader-macro 'term read-close-bracket))
+      (trie-put! trie "\"" (cons-reader-macro 'term (pa$ read-string #f)))
+      (trie-put! trie "#*\"" (cons-reader-macro 'right-term (pa$ read-string #t)))
+      (trie-put! trie "#`" (cons-reader-macro 'right-term (pa$ read-string-interpolate #t)))
+      (trie-put! trie "#\"" (cons-reader-macro 'right-term read-string-interpolate-newer))
+      (trie-put! trie "#t" (cons-reader-macro 'non-term read-true))
+      (trie-put! trie "#f" (cons-reader-macro 'non-term read-false))
+      (trie-put! trie ";" (cons-reader-macro 'term read-line-comment))
+      (trie-put! trie "#;" (cons-reader-macro 'right-term read-sexp-comment))
+      (trie-put! trie "#|" (cons-reader-macro 'right-term (pa$ read-block-comment '(#\# #\|) '(#\| #\#))))
+      (trie-put! trie "#\\" (cons-reader-macro 'right-term read-character))
+      (trie-put! trie "#(" (cons-reader-macro 'right-term (pa$ read-vector list->vector)))
+      (trie-put! trie "#u8(" (cons-reader-macro 'right-term (pa$ read-vector list->u8vector)))
+      (trie-put! trie "#u16(" (cons-reader-macro 'right-term (pa$ read-vector list->u16vector)))
+      (trie-put! trie "#u32(" (cons-reader-macro 'right-term (pa$ read-vector list->u32vector)))
+      (trie-put! trie "#u64(" (cons-reader-macro 'right-term (pa$ read-vector list->u64vector)))
+      (trie-put! trie "#s16(" (cons-reader-macro 'right-term (pa$ read-vector list->s16vector)))
+      (trie-put! trie "#s32(" (cons-reader-macro 'right-term (pa$ read-vector list->s32vector)))
+      (trie-put! trie "#s64(" (cons-reader-macro 'right-term (pa$ read-vector list->s64vector)))
+      (trie-put! trie "#f16(" (cons-reader-macro 'right-term (pa$ read-vector list->f16vector)))
+      (trie-put! trie "#f32(" (cons-reader-macro 'right-term (pa$ read-vector list->f32vector)))
+      (trie-put! trie "#f64(" (cons-reader-macro 'right-term (pa$ read-vector list->f64vector)))
+      (trie-put! trie "#[" (cons-reader-macro 'right-term read-charset))
+      (trie-put! trie "#/" (cons-reader-macro 'right-term read-regexp))
+      (trie-put! trie "|" (cons-reader-macro 'term read-multi-escape))
+      (trie-put! trie "#!" (cons-reader-macro 'right-term read-hash-bang))
       )))
 
 ;-------------------------
@@ -477,7 +477,7 @@
        (let ([cont (car result)]
              [reader-macro (cdr result)])
          (case (get-reader-macro-type reader-macro)
-           [(:term :right-term)
+           [(term right-term)
             (receive (result-reader-macro ungotten-chars)
               (find-longest-term-macro delim port kind-table cont reader-macro '())
               (do-read-end ctx port '() ungotten-chars result-reader-macro term-macro-candidates src-info))]
@@ -527,7 +527,7 @@
                 (let ([cont (car result)]
                       [macro (cdr result)])
                   (case (get-reader-macro-type macro)
-                    [(:term :right-term)
+                    [(term right-term)
                      (loop (read-char port) macro cont '())]
                     [else
                      (loop (read-char port) reader-macro cont (cons ch pending-chars))]))]
@@ -564,7 +564,7 @@
                  (let ([cont (car result)]
                        [macro (cdr result)])
                    (case (get-reader-macro-type macro)
-                     [(:right-term :non-term) (cons cont (+ (cdr candidate) 1))]
+                     [(right-term non-term) (cons cont (+ (cdr candidate) 1))]
                      [else (cdr candidate)]))] ;;return char-count
                 [(is-a? result <trie>)
                  (cons result (+ (cdr candidate) 1))]

@@ -53,9 +53,8 @@
   (test* "list read" (test-error) (ya-read port)) ;;read close bracket
   (test* "list read" (eof-object) (ya-read port)))
 
-(let1 port (wrap-ya-port (open-input-string "#(a b c) a#(b c)d #(a b . c) #u8(1 2) #u16(1 2) #f32(1 2 3.14)"))
+(let1 port (wrap-ya-port (open-input-string "#(a b c) #(b c)d #(a b . c) #u8(1 2) #u16(1 2) #f32(1 2 3.14)"))
   (test* "vector read" #(a b c) (ya-read port))
-  (test* "vector read" 'a (ya-read port))
   (test* "vector read" #(b c) (ya-read port))
   (test* "vector read" 'd (ya-read port))
   (test* "vector read" (test-error) (ya-read port))
@@ -105,12 +104,12 @@
   (test* "line comment read" 'a (ya-read port))
   (test* "line comment read" (eof-object) (ya-read port)))
 
-(let1 port (wrap-ya-port (open-input-string "a#;bc\n #;(a ;)\r b)c"))
+(let1 port (wrap-ya-port (open-input-string "a #;bc\n #;(a ;)\r b)c"))
   (test* "s-exp comment read" 'a (ya-read port))
   (test* "s-exp comment read" 'c (ya-read port))
   (test* "s-exp comment read" (eof-object) (ya-read port)))
 
-(let1 port (wrap-ya-port (open-input-string "a#|iue|#o #|ai#|ue|#o|#k"))
+(let1 port (wrap-ya-port (open-input-string "a #|iue|#o #|ai#|ue|#o|#k"))
   (test* "block-exp comment read" 'a (ya-read port))
   (test* "block-exp comment read" 'o (ya-read port))
   (test* "block-exp comment read" 'k (ya-read port))
@@ -137,7 +136,6 @@
   (test* "multi-escape symbol read" '|\#\|| (ya-read port))
   (test* "symbol read" (eof-object) (ya-read port)))
 
-
 (test* "hash-bang read" :shebang
   (ya-read (wrap-ya-port (open-input-string "#!/shebang\n:shebang"))))
 (test* "hash-bang read" :space-shebang
@@ -145,3 +143,16 @@
 (test* "hash-bang read" (undefined)
   (ya-read (wrap-ya-port (open-input-string "#! shebang\n#!hash-bang"))))
 
+(let1 port (wrap-ya-port (open-input-string "a#t #t #ta"))
+  (test* "s-exp non-term macro" '|a#t| (ya-read port))
+  (test* "s-exp non-term macro" #t (ya-read port))
+  (test* "s-exp non-term macro" '|#ta| (ya-read port))
+  (test* "s-exp non-term macro" (eof-object) (ya-read port)))
+
+(let1 port (wrap-ya-port (open-input-string "#(1) a#(1)"))
+  (test* "s-exp righte-term macro" #(1) (ya-read port))
+  (test* "s-exp righte-term macro" '|a#| (ya-read port))
+  (test* "s-exp righte-term macro" '(1) (ya-read port))
+  (test* "s-exp righte-term macro" (eof-object) (ya-read port)))
+
+(test-end)

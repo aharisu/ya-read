@@ -427,9 +427,9 @@
   (let1 ch (read-char port)
     (cond
       [(eof-object? ch)
-       (do-read-end ctx port buffer pending-chars candidate-reader-macro term-macro-candidates src-info)]
+       (do-read-end ctx port (append buffer pending-chars) '() candidate-reader-macro term-macro-candidates src-info)]
       [(eq? ch delim)
-       (do-read-end ctx port buffer (cons ch pending-chars) candidate-reader-macro term-macro-candidates src-info)]
+       (do-read-end ctx port (append buffer pending-chars) (list ch) candidate-reader-macro term-macro-candidates src-info)]
       [else
         (case (char-kind ch kind-table)
           [(constituent)
@@ -439,7 +439,7 @@
                                 src-info
                                 )]
           [(whitespace)
-           (do-read-end ctx port buffer (cons ch pending-chars) candidate-reader-macro term-macro-candidates src-info)]
+           (do-read-end ctx port (append buffer pending-chars) (list ch) candidate-reader-macro term-macro-candidates src-info)]
           [(illegal)
            (error "todo illegal")])])))
 

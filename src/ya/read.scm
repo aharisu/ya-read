@@ -329,6 +329,14 @@
       (read-word ctx port)
       (undefined))))
 
+(define (read-reader-constractor ctx port)
+  (let1 list (read-list #\) ctx port)
+    (if (null? list)
+      (read-error (format "bad #,-form: ~a" list) port)
+      (if-let1 ctor (%get-reader-ctor (car list))
+        (apply (car ctor) (cdr list))
+        (read-error (format "unknown #,-key: ~a" (car list)) port)))))
+
 (define *reader-table*
   (make-parameter
     (rlet1 trie (make-trie)
@@ -365,6 +373,7 @@
       (trie-put! trie "#/" (cons-reader-macro 'right-term read-regexp))
       (trie-put! trie "|" (cons-reader-macro 'term read-multi-escape))
       (trie-put! trie "#!" (cons-reader-macro 'right-term read-hash-bang))
+      (trie-put! trie "#,(" (cons-reader-macro 'right-term read-reader-constractor))
       )))
 
 (define (add-reader-macro dispatch-string macro-type reader-macro)

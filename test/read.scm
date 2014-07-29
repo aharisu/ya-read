@@ -155,4 +155,20 @@
   (test* "s-exp righte-term macro" '(1) (ya-read port))
   (test* "s-exp righte-term macro" (eof-object) (ya-read port)))
 
+(define-reader-ctor 'pi (lambda () (* (atan 1) 4)))
+(define-reader-ctor 'hash
+  (lambda (type . pairs)
+    (rlet1 tab (make-hash-table type)
+      (for-each
+        (lambda (pair) (hash-table-put! tab (car pair) (cdr pair)))
+        pairs))))
+
+(let1 port (wrap-ya-port (open-input-string "#,(pi) '(#,(pi)) #,(hash eq? (foo . bar) (hoge . piyo))"))
+  (test* "reader constractor" 3.141592653589793 (ya-read port))
+  (test* "reader constractor" ''(3.141592653589793) (ya-read port))
+  (let1 table (ya-read port)
+    (test* "reader constractor" 'bar (hash-table-get table 'foo))
+    (test* "reader constractor" 'piyo (hash-table-get table 'hoge)))
+  (test* "s-exp righte-term macro" (eof-object) (ya-read port)))
+
 (test-end)

@@ -529,7 +529,7 @@
            [(term right-term)
             (receive (result-reader-macro ungotten-chars)
               (find-longest-term-macro delim port kind-table cont reader-macro '())
-              (do-read-end flags port '() ungotten-chars result-reader-macro term-macro-candidates src-info))]
+              (do-read-end flags port '() ungotten-chars result-reader-macro '() src-info))]
            [else
             (do-read-term-candidate
               :normal

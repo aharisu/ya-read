@@ -8,6 +8,7 @@
   (export ya-read ya-read-rec
     add-ya-read-after-hook
     add-each-ya-read-after-hook
+    add-char-kind add-reader-macro
     ))
 
 (select-module ya.read)
@@ -18,6 +19,16 @@
   (make-parameter
     (list
       (cons char-set:whitespace 'whitespace))))
+
+(define (add-char-kind char-spec char-type :optional (head? #f))
+  (if (memq char-type '(whitespace constituent illegal))
+    (if (or (char? char-spec) (char-set? char-spec))
+      (*char-kind-table*
+        (if head?
+          (cons (cons char-spec char-type) (*char-kind-table*))
+          (append (*char-kind-table*) (list (cons char-spec char-type)))))
+      (errorf "char-spec require #<char> or #<char-set>"))
+    (errorf "char-type require one of the 'whitespace, 'constituent or 'illegal")))
 
 (define cons-reader-macro cons)
 (define (reader-macro? obj)
@@ -355,6 +366,14 @@
       (trie-put! trie "|" (cons-reader-macro 'term read-multi-escape))
       (trie-put! trie "#!" (cons-reader-macro 'right-term read-hash-bang))
       )))
+
+(define (add-reader-macro dispatch-string macro-type reader-macro)
+  (if (memq macro-type '(term right-term non-term))
+    (*reader-table* (apply trie '()
+                           (cons
+                             (cons dispatch-string (cons-reader-macro macro-type reader-macro))
+                             (trie->list (*reader-table*)))))
+    (errorf "macro-type require one of the 'term, 'right-term or 'non-term")))
 
 ;-------------------------
 ; reader entry point

@@ -171,4 +171,12 @@
     (test* "reader constractor" 'piyo (hash-table-get table 'hoge)))
   (test* "s-exp righte-term macro" (eof-object) (ya-read port)))
 
+(define *counter* 0)
+(define-reader-ctor 'countup (lambda () (inc! *counter*) #f))
+(let1 port (wrap-ya-port (open-input-string "#,(countup) #;#,(countup) #,(countup)"))
+  (ya-read port)
+  (ya-read port)
+  (ya-read port)
+  (test* "reader constractor" 2 *counter*))
+
 (test-end)

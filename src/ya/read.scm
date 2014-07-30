@@ -331,11 +331,15 @@
 
 (define (read-reader-constractor ctx port)
   (let1 list (read-list #\) ctx port)
-    (if (null? list)
-      (read-error (format "bad #,-form: ~a" list) port)
-      (if-let1 ctor (%get-reader-ctor (car list))
-        (apply (car ctor) (cdr list))
-        (read-error (format "unknown #,-key: ~a" (car list)) port)))))
+    (cond
+      [(has-flag (reader-context-flags ctx) :skip)
+       #f]
+      [(null? list)
+       (read-error (format "bad #,-form: ~a" list) port)]
+      [(%get-reader-ctor (car list))
+       => (lambda (ctor) (apply (car ctor) (cdr list)))]
+      [else 
+        (read-error (format "unknown #,-key: ~a" (car list)) port)])))
 
 (define *reader-table*
   (make-parameter
@@ -396,7 +400,7 @@
     (cons flag flags)))
 
 (define (has-flag flags flag)
-  (memq flags flags))
+  (memq flag flags))
 
 (define *read-after-hook* '())
 (define *each-read-after-hook* '())

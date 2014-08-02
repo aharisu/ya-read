@@ -238,4 +238,15 @@
   (ya-read port)
   (test* "reader constractor" 2 *counter*))
 
+(add-reader-macro "a" 'term (lambda (port) 1))
+(add-reader-macro "ab" 'right-term (lambda (port) 2))
+(add-reader-macro "bc" 'non-term (lambda (port) 3))
+
+(let1 port (wrap-ya-port (open-input-string "zabc"))
+  (test* "term macro" 'z (ya-read port))
+  (test* "term macro" 1 (ya-read port))
+  (test* "term macro" 3 (ya-read port))
+  (test* "term macro" (eof-object) (ya-read port)))
+
 (test-end)
+

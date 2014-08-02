@@ -185,7 +185,7 @@
   (let1 first-ch (read-char port)
     (if (eof-object? first-ch)
       (eof-error "character" port)
-      (let1 char-str (car (do-read-loop-no-readermacro #f
+      (let1 char-str (caar (do-read-loop-no-readermacro #f
                                                        port
                                                        (slot-ref port 'kind-table)
                                                        (slot-ref port 'reader-table)
@@ -460,25 +460,32 @@
   (do-read closer port))
 
 (define (do-read delim port)
-  (let1 result (do-read-first delim port (slot-ref port 'kind-table) (slot-ref port 'reader-table))
+  (let1 result (do-read-first
+                 delim
+                 (and (has-ctx? port :middle) (begin (clear-ctx! port :middle) #t))
+                 port (slot-ref port 'kind-table) (slot-ref port 'reader-table))
     (cond
       [(eq? result :eof)
        (eof-object)]
       [(eq? result :delim)
        delim-sym]
-      [(string? (car result))
+      [(string? (caar result))
+       (when (cdar result)
+         (add-ctx! port :middle))
        (do-read-after
-         (read-symbol-or-number (car result))
+         (read-symbol-or-number (caar result))
          (cdr result))]
-      [(reader-macro? (car result))
-       (let1 macro-result (values->list ((get-reader-macro-fun (car result)) port))
+      [(reader-macro? (caar result))
+       (when (cdar result)
+         (add-ctx! port :middle))
+       (let1 macro-result (values->list ((get-reader-macro-fun (caar result)) port))
          (if (null? macro-result)
            (do-read delim port)
            (do-read-after
              (car macro-result)
              (cdr result))))])))
 
-(define (do-read-first delim port kind-table reader-table)
+(define (do-read-first delim middle? port kind-table reader-table)
   (let1 ch (read-char port)
     (cond
       [(eof-object? ch)
@@ -488,36 +495,36 @@
       [else
         (case (char-kind ch kind-table)
           [(constituent)
-           (do-read-constituent delim port ch kind-table reader-table reader-table
+           (do-read-constituent delim middle? port ch kind-table reader-table reader-table
                                 '() '() '()
                                 (source-info port))]
           [(whitespace skip)
-           (do-read-first delim port kind-table reader-table)]
+           (do-read-first delim middle? port kind-table reader-table)]
           [(illegal)
            (error "todo illegal")])])))
 
-(define (do-read-loop delim port kind-table reader-table reader-table-cont
+(define (do-read-loop delim middle? port kind-table reader-table reader-table-cont
                       buffer term-macro-candidates
                       pending-chars candidate-reader-macro
                       src-info)
   (let1 ch (read-char port)
     (cond
       [(eof-object? ch)
-       (do-read-end port (append buffer pending-chars) '() candidate-reader-macro term-macro-candidates src-info)]
+       (do-read-end #f port (append buffer pending-chars) '() candidate-reader-macro term-macro-candidates src-info)]
       [(eq? ch delim)
-       (do-read-end port (append buffer pending-chars) (list ch) candidate-reader-macro term-macro-candidates src-info)]
+       (do-read-end #f port (append buffer pending-chars) (list ch) candidate-reader-macro term-macro-candidates src-info)]
       [else
         (case (char-kind ch kind-table)
           [(constituent)
-           (do-read-constituent delim port ch kind-table reader-table reader-table-cont
+           (do-read-constituent delim middle? port ch kind-table reader-table reader-table-cont
                                 buffer term-macro-candidates
                                 pending-chars
                                 src-info
                                 )]
           [(whitespace)
-           (do-read-end port (append buffer pending-chars) (list ch) candidate-reader-macro term-macro-candidates src-info)]
+           (do-read-end #f port (append buffer pending-chars) (list ch) candidate-reader-macro term-macro-candidates src-info)]
           [(skip)
-           (do-read-loop delim port kind-table reader-table reader-table-cont
+           (do-read-loop delim middle? port kind-table reader-table reader-table-cont
                          buffer term-macro-candidates
                          pending-chars candidate-reader-macro
                          src-info)]
@@ -529,28 +536,28 @@
   (let1 ch (read-char port)
     (cond
       [(eof-object? ch)
-       (do-read-end port buffer [] #f term-macro-candidates src-info)]
+       (do-read-end #f port buffer [] #f term-macro-candidates src-info)]
       [(eq? ch delim)
        (ungetc ch port)
-       (do-read-end port buffer [] #f term-macro-candidates src-info)]
+       (do-read-end #f port buffer [] #f term-macro-candidates src-info)]
       [else
         (case (char-kind ch kind-table)
           [(constituent)
            (do-read-term-candidate
              :no-readermacro
-             delim port ch kind-table reader-table #f
+             delim #f port ch kind-table reader-table #f
              (cons ch buffer) term-macro-candidates
              '() #f
              src-info)]
           [(whitespace)
-           (do-read-end port buffer [] #f term-macro-candidates src-info)]
+           (do-read-end #f port buffer [] #f term-macro-candidates src-info)]
           [(skip)
            (do-read-loop-no-readermacro delim port kind-table reader-table buffer term-macro-candidates
                                         src-info)]
           [(illegal)
            ])])))
 
-(define (do-read-constituent delim port ch kind-table reader-table reader-table-cont
+(define (do-read-constituent delim middle? port ch kind-table reader-table reader-table-cont
                              buffer term-macro-candidates
                              pending-chars
                              src-info)
@@ -560,24 +567,23 @@
        ;;match key and will probably match
        (let ([cont (car result)]
              [reader-macro (cdr result)])
-         (case (get-reader-macro-type reader-macro)
-           [(term right-term)
-            (receive (result-reader-macro ungotten-chars)
-              (find-longest-term-macro delim port kind-table cont reader-macro '())
-              (do-read-end port '() ungotten-chars result-reader-macro '() src-info))]
-           [else
-            (do-read-term-candidate
-              :normal
-              delim port ch kind-table reader-table cont
-              (append (cons ch pending-chars) buffer)
-              term-macro-candidates
-              '() reader-macro
-              src-info)]))]
+         (if (memq (get-reader-macro-type reader-macro)
+                   (if middle? '(term) '(term right-term)))
+           (receive (result-reader-macro ungotten-chars)
+             (find-longest-term-macro delim middle? port kind-table cont reader-macro '())
+             (do-read-end #f port '() ungotten-chars result-reader-macro '() src-info))
+           (do-read-term-candidate
+             :normal
+             delim middle? port ch kind-table reader-table cont
+             (append (cons ch pending-chars) buffer)
+             term-macro-candidates
+             '() reader-macro
+             src-info)))]
       [(is-a? result <trie>)
        ;;will probably match
        (do-read-term-candidate
          :normal
-         delim port ch kind-table reader-table result
+         delim middle? port ch kind-table reader-table result
          buffer
          term-macro-candidates
          (cons ch pending-chars) #f
@@ -586,13 +592,13 @@
         ;; no match
         (do-read-term-candidate
           :no-readermacro
-          delim port ch kind-table reader-table #f
+          delim middle? port ch kind-table reader-table #f
           (append (cons ch pending-chars) buffer)
           term-macro-candidates
           '() #f
           src-info)])))
 
-(define (find-longest-term-macro delim port kind-table reader-table-cont reader-macro pending-chars)
+(define (find-longest-term-macro delim middle? port kind-table reader-table-cont reader-macro pending-chars)
   (let loop ([ch (read-char port)]
              [reader-macro reader-macro]
              [reader-table-cont reader-table-cont]
@@ -610,11 +616,10 @@
                [(pair? result)
                 (let ([cont (car result)]
                       [macro (cdr result)])
-                  (case (get-reader-macro-type macro)
-                    [(term right-term)
-                     (loop (read-char port) macro cont '())]
-                    [else
-                     (loop (read-char port) reader-macro cont (cons ch pending-chars))]))]
+                  (if (memq (get-reader-macro-type macro)
+                            (if middle? '(term) '(term right-term)))
+                    (loop (read-char port) macro cont '())
+                    (loop (read-char port) reader-macro cont (cons ch pending-chars))))]
                [(is-a? result <trie>)
                 (loop (read-char port) reader-macro result (cons ch pending-chars))]
                [else
@@ -626,12 +631,12 @@
           [(illegal)
            (error "todo illegal")])])))
 
-(define (do-read-term-candidate next-type delim port ch kind-table reader-table reader-table-cont buffer term-macro-candidates
+(define (do-read-term-candidate next-type delim middle? port ch kind-table reader-table reader-table-cont buffer term-macro-candidates
                                     pending-chars candidate-reader-macro
                                     src-info)
   (if (and (null? buffer) (null? pending-chars))
     (if (eq? next-type :normal)
-      (do-read-loop delim port kind-table reader-table reader-table-cont
+      (do-read-loop delim middle? port kind-table reader-table reader-table-cont
                     '() term-macro-candidates
                     '() candidate-reader-macro
                     src-info)
@@ -659,9 +664,9 @@
         (append term-macro-candidates (list (cons reader-table 1))))
       (cond
         [(and (not (null? new-term-macro-candidates)) (every integer? new-term-macro-candidates))
-         (do-read-end port buffer pending-chars #f new-term-macro-candidates src-info)]
+         (do-read-end #t port buffer pending-chars #f new-term-macro-candidates src-info)]
         [(eq? next-type :normal)
-         (do-read-loop delim port kind-table reader-table reader-table-cont
+         (do-read-loop delim middle? port kind-table reader-table reader-table-cont
                        buffer new-term-macro-candidates
                        pending-chars candidate-reader-macro
                        src-info)]
@@ -670,7 +675,7 @@
                                        buffer new-term-macro-candidates
                                        src-info)]))))
 
-(define (do-read-end port buffer pending-chars reader-macro term-macro-candidates src-info)
+(define (do-read-end middle? port buffer pending-chars reader-macro term-macro-candidates src-info)
   (receive (buffer pending-chars reader-macro)
     (let1 split-pos (fold
                       (lambda (char-count max-char-count)
@@ -685,10 +690,11 @@
           (values result-chars (append ungetc-chars pending-chars) #f))))
     ;; ungetc all pending-chars
     (for-each (cut ungetc <> port) pending-chars)
-    (cons
+    (acons
       (if reader-macro
         reader-macro
         (list->string (reverse buffer)))
+      middle?
       src-info)))
 
 (define (char-kind ch kind-table)
@@ -728,7 +734,7 @@
    (prev-ch :init-value 0)
    (col-list :init-value '())
    (port :init-keyword :port)
-   (ctx)
+   (ctx :init-value '())
    (kind-table)
    (reader-table)
    ))
@@ -736,7 +742,7 @@
 (define (init-ctx! port kind-table reader-table)
   (slot-set! port 'kind-table kind-table)
   (slot-set! port 'reader-table reader-table)
-  (slot-set! port 'ctx '()))
+  )
 
 (define (add-ctx! port ctx)
   (unless (memq ctx (slot-ref port 'ctx))

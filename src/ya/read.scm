@@ -21,14 +21,14 @@
       (cons char-set:whitespace 'whitespace))))
 
 (define (add-char-kind char-spec char-type :optional (head? #f))
-  (if (memq char-type '(whitespace constituent illegal))
+  (if (memq char-type '(whitespace constituent skip illegal))
     (if (or (char? char-spec) (char-set? char-spec))
       (*char-kind-table*
         (if head?
           (cons (cons char-spec char-type) (*char-kind-table*))
           (append (*char-kind-table*) (list (cons char-spec char-type)))))
       (errorf "char-spec require #<char> or #<char-set>"))
-    (errorf "char-type require one of the 'whitespace, 'constituent or 'illegal")))
+    (errorf "char-type require one of the 'whitespace, 'constituent, 'skip' or 'illegal")))
 
 (define cons-reader-macro cons)
 (define (reader-macro? obj)
@@ -308,6 +308,8 @@
              (write-char ch acc)
              (loop)]
             [(whitespace) ]
+            [(skip)
+             (loop)]
             [(illegal)
              (error "todo illegal")]))))
     (get-output-string acc)))
@@ -477,7 +479,7 @@
            (do-read-constituent delim flags port ch kind-table reader-table reader-table
                                 '() '() '()
                                 (source-info port))]
-          [(whitespace)
+          [(whitespace skip)
            (do-read-first delim flags port kind-table reader-table)]
           [(illegal)
            (error "todo illegal")])])))
@@ -502,6 +504,11 @@
                                 )]
           [(whitespace)
            (do-read-end flags port (append buffer pending-chars) (list ch) candidate-reader-macro term-macro-candidates src-info)]
+          [(skip)
+           (do-read-loop delim flags port kind-table reader-table reader-table-cont
+                         buffer term-macro-candidates
+                         pending-chars candidate-reader-macro
+                         src-info)]
           [(illegal)
            (error "todo illegal")])])))
 
@@ -525,6 +532,9 @@
              src-info)]
           [(whitespace)
            (do-read-end flags port buffer [] #f term-macro-candidates src-info)]
+          [(skip)
+           (do-read-loop-no-readermacro delim flags port kind-table reader-table buffer term-macro-candidates
+                                        src-info)]
           [(illegal)
            ])])))
 
@@ -599,6 +609,8 @@
                  (values reader-macro (cons ch pending-chars))]))]
           [(whitespace)
            (values reader-macro (cons ch pending-chars))]
+          [(skip)
+           (loop (read-char port) reader-macro reader-table-cont pending-chars)]
           [(illegal)
            (error "todo illegal")])])))
 

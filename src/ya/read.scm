@@ -70,18 +70,12 @@
 (define get-reader-macro-type car)
 (define get-reader-macro-fun cdr)
 
-(define (constract-reader-context flags kind-table reader-table)
-  (list flags kind-table reader-table))
-
-(define reader-context-flags car)
-(define reader-context-kind-table cadr)
-(define reader-context-reader-table caddr)
-
-(define (reader-context-add-flag ctx flag)
-  (constract-reader-context
-    (add-flag (reader-context-flags ctx) flag)
-    (reader-context-kind-table ctx)
-    (reader-context-reader-table ctx)))
+(define-macro (with-ctx port ctx . body)
+  `(unwind-protect
+     (begin
+       (add-ctx! ,port ,ctx)
+       ,@body)
+     (clear-ctx! ,port ,ctx)))
 
 ;-------------------------
 ; reader macro functions
@@ -99,41 +93,41 @@
 
 (define delim-sym (gensym))
 
-(define (read-quote ctx port)
-  (list 'quote (ya-read-rec ctx port)))
+(define (read-quote port)
+  (list 'quote (ya-read-rec port)))
 
-(define (read-quasiquote ctx port)
-  (list 'quasiquote (ya-read-rec ctx port)))
+(define (read-quasiquote port)
+  (list 'quasiquote (ya-read-rec port)))
 
-(define (read-unquote ctx port)
-  (list 'unquote (ya-read-rec ctx port)))
+(define (read-unquote port)
+  (list 'unquote (ya-read-rec port)))
 
-(define (read-unquote-splicing ctx port)
-  (list 'unquote-splicing (ya-read-rec ctx port)))
+(define (read-unquote-splicing port)
+  (list 'unquote-splicing (ya-read-rec port)))
 
-(define (read-close-paren ctx port)
+(define (read-close-paren port)
   (read-error "unexpected close paren ')'" port))
 
-(define (read-close-bracket ctx port)
+(define (read-close-bracket port)
   (read-error "unexpected close paren ']'" port))
 
-(define (read-list closer ctx port)
+(define (read-list closer port)
   (let loop ([pair '()])
-    (let1 result (ya-read-rec-with-closer closer ctx port)
+    (let1 result (ya-read-rec-with-closer closer port)
       (cond
         [(eof-object? result)
          (read-error "unexpected end-of-file while reading a list" port)]
         [(eq? result delim-sym)
          (reverse pair)]
         [(eq? result '|.|)
-         (let1 last-ch (ya-read-rec-with-closer closer ctx port)
+         (let1 last-ch (ya-read-rec-with-closer closer port)
            (cond
              [(eof-object? last-ch)
               (read-error "unexpected end-of-file while reading a list" port)]
              [(eq? last-ch closer)
               (read-error "bad dot syntax" port)]
              [else
-               (let1 close-ch (ya-read-rec-with-closer closer ctx port)
+               (let1 close-ch (ya-read-rec-with-closer closer port)
                  (cond
                    [(eof-object? close-ch)
                     (read-error "unexpected end-of-file while reading a list" port)]
@@ -144,10 +138,10 @@
         [else
           (loop (cons result pair))]))))
 
-(define (read-vector to->vector ctx port)
-  (to->vector (read-list #\) ctx port)))
+(define (read-vector to->vector port)
+  (to->vector (read-list #\) port)))
 
-(define (read-string incomplete? ctx port)
+(define (read-string incomplete? port)
   (define (eof-error str-acc)
     (write-char #\" str-acc)
     (read-error (format "EOF encountered in a string literal: ~a"
@@ -177,36 +171,35 @@
             (loop)])))
     (*orginal-read* (open-input-string (get-output-string str-acc)))))
 
-(define (read-string-interpolate legacy? ctx port)
-  (let1 sexp (ya-read-rec ctx port)
+(define (read-string-interpolate legacy? port)
+  (let1 sexp (ya-read-rec port)
     (if (eof-object? sexp)
       (eof-error "string-interpolate" port)
       (string-interpolate sexp legacy?))))
 
-(define (read-string-interpolate-newer ctx port)
+(define (read-string-interpolate-newer port)
   (ungetc #\" port)
-  (read-string-interpolate #f ctx port))
+  (read-string-interpolate #f port))
 
-(define (read-character ctx port)
+(define (read-character port)
   (let1 first-ch (read-char port)
     (if (eof-object? first-ch)
       (eof-error "character" port)
       (let1 char-str (car (do-read-loop-no-readermacro #f
-                                                       (reader-context-flags ctx)
                                                        port
-                                                       (reader-context-kind-table ctx)
-                                                       (reader-context-reader-table ctx)
+                                                       (slot-ref port 'kind-table)
+                                                       (slot-ref port 'reader-table)
                                                        (list first-ch) '()
                                                        #f))
         (*orginal-read* (open-input-string (string-append "#\\" char-str)))))))
 
-(define (read-true ctx port)
+(define (read-true port)
   #t)
 
-(define (read-false ctx port)
+(define (read-false port)
   #f)
 
-(define (read-line-comment ctx port)
+(define (read-line-comment port)
   (let loop ([ch (read-char port)])
     (cond
       [(or (eof-object? ch) (char=? ch #\newline)) ]
@@ -218,12 +211,14 @@
   ;;no value
   (values))
 
-(define (read-sexp-comment ctx port)
+(define (read-sexp-comment port)
   ;;read s-expression to skip
-  (ya-read-rec (reader-context-add-flag ctx :skip) port)
+  (with-ctx
+    port :skip
+    (ya-read-rec port))
   (values))
 
-(define (read-block-comment opener closer ctx port)
+(define (read-block-comment opener closer port)
   (define (match-test char-list)
     (let match-test-loop ([char-list char-list]
                           [pending-chars '()])
@@ -252,7 +247,7 @@
           (loop nest-level)])))
   (values))
 
-(define (read-charset ctx port)
+(define (read-charset port)
   (let1 acc (open-output-string)
     (write-char #\# acc)
     (write-char #\[ acc)
@@ -281,7 +276,7 @@
             (loop nest)])))
     (*orginal-read* (open-input-string (get-output-string acc)))))
 
-(define (read-regexp ctx port)
+(define (read-regexp port)
   (let1 acc (open-output-string)
     (write-char #\# acc)
     (write-char #\/ acc)
@@ -309,7 +304,7 @@
             (loop)])))
     (*orginal-read* (open-input-string (get-output-string acc)))))
 
-(define (read-multi-escape ctx port)
+(define (read-multi-escape port)
   (let1 acc (open-output-string)
     (let loop ()
       (let1 ch (read-char port)
@@ -329,7 +324,7 @@
             (loop)])))
     (string->symbol (get-output-string acc))))
 
-(define (read-word ctx port)
+(define (read-word port)
   (let ([acc (open-output-string)]
         [kind-table (*char-kind-table*)])
     (let loop ()
@@ -346,7 +341,7 @@
              (error "todo illegal")]))))
     (get-output-string acc)))
 
-(define (read-hash-bang ctx port)
+(define (read-hash-bang port)
   (if (and
         (= (slot-ref port 'line) 1)
         (= (slot-ref port 'col) 2)
@@ -357,16 +352,16 @@
             (begin
               (ungetc ch port)
               #f))))
-    (read-line-comment ctx port)
+    (read-line-comment port)
     (begin
       ;;TODO handling reader directive
-      (read-word ctx port)
+      (read-word port)
       (undefined))))
 
-(define (read-reader-constractor ctx port)
-  (let1 list (read-list #\) ctx port)
+(define (read-reader-constractor port)
+  (let1 list (read-list #\) port)
     (cond
-      [(has-flag (reader-context-flags ctx) :skip)
+      [(has-ctx? port :skip)
        #f]
       [(null? list)
        (read-error (format "bad #,-form: ~a" list) port)]
@@ -426,16 +421,6 @@
 ; reader entry point
 ;-------------------------
 
-(define empty-flags [])
-
-(define (add-flag flags flag)
-  (if (memq flag flags)
-    flag
-    (cons flag flags)))
-
-(define (has-flag flags flag)
-  (memq flag flags))
-
 (define *read-after-hook* '())
 (define *each-read-after-hook* '())
 
@@ -447,13 +432,15 @@
 
 (define (ya-read :optional (port (current-input-port)))
   (if (ya-wraped-port? port)
-    (let1 exp (do-read #f empty-flags port (*char-kind-table*) (*reader-table*))
-      (if (eof-object? exp)
-        exp
-        (fold
-          (lambda (hook-proc exp) (hook-proc exp)) 
+    (begin
+      (init-ctx! port (*char-kind-table*) (*reader-table*))
+      (let1 exp (do-read #f port)
+        (if (eof-object? exp)
           exp
-          *read-after-hook*)))
+          (fold
+            (lambda (hook-proc exp) (hook-proc exp)) 
+            exp
+            *read-after-hook*))))
     (*orginal-read* port)))
 
 (define (do-read-after sexp src-info)
@@ -466,19 +453,14 @@
         sexp)
       *each-read-after-hook*)))
 
-(define (ya-read-rec ctx port)
-  (ya-read-rec-with-closer #f ctx port))
+(define (ya-read-rec port)
+  (ya-read-rec-with-closer #f port))
 
-(define (ya-read-rec-with-closer closer ctx port)
-  (do-read closer
-           (reader-context-flags ctx)
-           port
-           (reader-context-kind-table ctx)
-           (reader-context-reader-table ctx)
-           ))
+(define (ya-read-rec-with-closer closer port)
+  (do-read closer port))
 
-(define (do-read delim flags port kind-table reader-table)
-  (let1 result (do-read-first delim flags port  kind-table reader-table)
+(define (do-read delim port)
+  (let1 result (do-read-first delim port (slot-ref port 'kind-table) (slot-ref port 'reader-table))
     (cond
       [(eq? result :eof)
        (eof-object)]
@@ -489,16 +471,14 @@
          (read-symbol-or-number (car result))
          (cdr result))]
       [(reader-macro? (car result))
-       (let1 macro-result (values->list ((get-reader-macro-fun (car result))
-                                         (constract-reader-context flags kind-table reader-table)
-                                         port))
+       (let1 macro-result (values->list ((get-reader-macro-fun (car result)) port))
          (if (null? macro-result)
-           (do-read delim flags port kind-table reader-table)
+           (do-read delim port)
            (do-read-after
              (car macro-result)
              (cdr result))))])))
 
-(define (do-read-first delim flags port kind-table reader-table)
+(define (do-read-first delim port kind-table reader-table)
   (let1 ch (read-char port)
     (cond
       [(eof-object? ch)
@@ -508,69 +488,69 @@
       [else
         (case (char-kind ch kind-table)
           [(constituent)
-           (do-read-constituent delim flags port ch kind-table reader-table reader-table
+           (do-read-constituent delim port ch kind-table reader-table reader-table
                                 '() '() '()
                                 (source-info port))]
           [(whitespace skip)
-           (do-read-first delim flags port kind-table reader-table)]
+           (do-read-first delim port kind-table reader-table)]
           [(illegal)
            (error "todo illegal")])])))
 
-(define (do-read-loop delim flags port kind-table reader-table reader-table-cont
+(define (do-read-loop delim port kind-table reader-table reader-table-cont
                       buffer term-macro-candidates
                       pending-chars candidate-reader-macro
                       src-info)
   (let1 ch (read-char port)
     (cond
       [(eof-object? ch)
-       (do-read-end flags port (append buffer pending-chars) '() candidate-reader-macro term-macro-candidates src-info)]
+       (do-read-end port (append buffer pending-chars) '() candidate-reader-macro term-macro-candidates src-info)]
       [(eq? ch delim)
-       (do-read-end flags port (append buffer pending-chars) (list ch) candidate-reader-macro term-macro-candidates src-info)]
+       (do-read-end port (append buffer pending-chars) (list ch) candidate-reader-macro term-macro-candidates src-info)]
       [else
         (case (char-kind ch kind-table)
           [(constituent)
-           (do-read-constituent delim flags port ch kind-table reader-table reader-table-cont
+           (do-read-constituent delim port ch kind-table reader-table reader-table-cont
                                 buffer term-macro-candidates
                                 pending-chars
                                 src-info
                                 )]
           [(whitespace)
-           (do-read-end flags port (append buffer pending-chars) (list ch) candidate-reader-macro term-macro-candidates src-info)]
+           (do-read-end port (append buffer pending-chars) (list ch) candidate-reader-macro term-macro-candidates src-info)]
           [(skip)
-           (do-read-loop delim flags port kind-table reader-table reader-table-cont
+           (do-read-loop delim port kind-table reader-table reader-table-cont
                          buffer term-macro-candidates
                          pending-chars candidate-reader-macro
                          src-info)]
           [(illegal)
            (error "todo illegal")])])))
 
-(define (do-read-loop-no-readermacro delim flags port kind-table reader-table buffer term-macro-candidates
+(define (do-read-loop-no-readermacro delim port kind-table reader-table buffer term-macro-candidates
                                      src-info)
   (let1 ch (read-char port)
     (cond
       [(eof-object? ch)
-       (do-read-end flags port buffer [] #f term-macro-candidates src-info)]
+       (do-read-end port buffer [] #f term-macro-candidates src-info)]
       [(eq? ch delim)
        (ungetc ch port)
-       (do-read-end flags port buffer [] #f term-macro-candidates src-info)]
+       (do-read-end port buffer [] #f term-macro-candidates src-info)]
       [else
         (case (char-kind ch kind-table)
           [(constituent)
            (do-read-term-candidate
              :no-readermacro
-             delim flags port ch kind-table reader-table #f
+             delim port ch kind-table reader-table #f
              (cons ch buffer) term-macro-candidates
              '() #f
              src-info)]
           [(whitespace)
-           (do-read-end flags port buffer [] #f term-macro-candidates src-info)]
+           (do-read-end port buffer [] #f term-macro-candidates src-info)]
           [(skip)
-           (do-read-loop-no-readermacro delim flags port kind-table reader-table buffer term-macro-candidates
+           (do-read-loop-no-readermacro delim port kind-table reader-table buffer term-macro-candidates
                                         src-info)]
           [(illegal)
            ])])))
 
-(define (do-read-constituent delim flags port ch kind-table reader-table reader-table-cont
+(define (do-read-constituent delim port ch kind-table reader-table reader-table-cont
                              buffer term-macro-candidates
                              pending-chars
                              src-info)
@@ -584,11 +564,11 @@
            [(term right-term)
             (receive (result-reader-macro ungotten-chars)
               (find-longest-term-macro delim port kind-table cont reader-macro '())
-              (do-read-end flags port '() ungotten-chars result-reader-macro '() src-info))]
+              (do-read-end port '() ungotten-chars result-reader-macro '() src-info))]
            [else
             (do-read-term-candidate
               :normal
-              delim flags port ch kind-table reader-table cont
+              delim port ch kind-table reader-table cont
               (append (cons ch pending-chars) buffer)
               term-macro-candidates
               '() reader-macro
@@ -597,7 +577,7 @@
        ;;will probably match
        (do-read-term-candidate
          :normal
-         delim flags port ch kind-table reader-table result
+         delim port ch kind-table reader-table result
          buffer
          term-macro-candidates
          (cons ch pending-chars) #f
@@ -606,7 +586,7 @@
         ;; no match
         (do-read-term-candidate
           :no-readermacro
-          delim flags port ch kind-table reader-table #f
+          delim port ch kind-table reader-table #f
           (append (cons ch pending-chars) buffer)
           term-macro-candidates
           '() #f
@@ -646,16 +626,16 @@
           [(illegal)
            (error "todo illegal")])])))
 
-(define (do-read-term-candidate next-type delim flags port ch kind-table reader-table reader-table-cont buffer term-macro-candidates
+(define (do-read-term-candidate next-type delim port ch kind-table reader-table reader-table-cont buffer term-macro-candidates
                                     pending-chars candidate-reader-macro
                                     src-info)
   (if (and (null? buffer) (null? pending-chars))
     (if (eq? next-type :normal)
-      (do-read-loop delim flags port kind-table reader-table reader-table-cont
+      (do-read-loop delim port kind-table reader-table reader-table-cont
                     '() term-macro-candidates
                     '() candidate-reader-macro
                     src-info)
-      (do-read-loop-no-readermacro delim flags port kind-table reader-table
+      (do-read-loop-no-readermacro delim port kind-table reader-table
                                    '() term-macro-candidates
                                    src-info))
     ;;;;
@@ -679,18 +659,18 @@
         (append term-macro-candidates (list (cons reader-table 1))))
       (cond
         [(and (not (null? new-term-macro-candidates)) (every integer? new-term-macro-candidates))
-         (do-read-end flags port buffer pending-chars #f new-term-macro-candidates src-info)]
+         (do-read-end port buffer pending-chars #f new-term-macro-candidates src-info)]
         [(eq? next-type :normal)
-         (do-read-loop delim flags port kind-table reader-table reader-table-cont
+         (do-read-loop delim port kind-table reader-table reader-table-cont
                        buffer new-term-macro-candidates
                        pending-chars candidate-reader-macro
                        src-info)]
         [else
-          (do-read-loop-no-readermacro delim flags port kind-table reader-table 
+          (do-read-loop-no-readermacro delim port kind-table reader-table 
                                        buffer new-term-macro-candidates
                                        src-info)]))))
 
-(define (do-read-end flags port buffer pending-chars reader-macro term-macro-candidates src-info)
+(define (do-read-end port buffer pending-chars reader-macro term-macro-candidates src-info)
   (receive (buffer pending-chars reader-macro)
     (let1 split-pos (fold
                       (lambda (char-count max-char-count)
@@ -748,7 +728,25 @@
    (prev-ch :init-value 0)
    (col-list :init-value '())
    (port :init-keyword :port)
+   (ctx)
+   (kind-table)
+   (reader-table)
    ))
+
+(define (init-ctx! port kind-table reader-table)
+  (slot-set! port 'kind-table kind-table)
+  (slot-set! port 'reader-table reader-table)
+  (slot-set! port 'ctx '()))
+
+(define (add-ctx! port ctx)
+  (unless (memq ctx (slot-ref port 'ctx))
+    (slot-set! port 'ctx (cons ctx (slot-ref port 'ctx)))))
+
+(define (clear-ctx! port ctx)
+  (slot-set! port 'ctx (delete ctx (slot-ref port 'ctx) eq?)))
+
+(define (has-ctx? port ctx)
+  (memq ctx (slot-ref port 'ctx)))
 
 (define *original-port-name* port-name)
 

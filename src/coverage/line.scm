@@ -5,7 +5,6 @@
   (use srfi-13)
   (use file.util)
 
-  (use ya.port)
   (use ya.read)
   (use coverage.util)
   (use debug.traverse)

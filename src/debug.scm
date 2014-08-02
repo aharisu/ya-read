@@ -5,7 +5,6 @@
 (use srfi-13)
 (use util.queue)
 
-(use ya.port)
 (use ya.read)
 (use debug.traverse)
 (use debug.message-queue)

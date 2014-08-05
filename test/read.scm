@@ -248,5 +248,17 @@
   (test* "term macro" 3 (ya-read port))
   (test* "term macro" (eof-object) (ya-read port)))
 
+(add-reader-macro "a" 'right-term (lambda (port) 1))
+(add-reader-macro "ab" 'right-term (lambda (port) 2))
+(add-reader-macro "abc" 'right-term (lambda (port) 3))
+
+(let1 port (wrap-ya-port (open-input-string "abc abcab adc"))
+  (test* "term macro" '3 (ya-read port))
+  (test* "term macro" '3 (ya-read port))
+  (test* "term macro" '2 (ya-read port))
+  (test* "term macro" '1 (ya-read port))
+  (test* "term macro" 'dc (ya-read port))
+  (test* "term macro" (eof-object) (ya-read port)))
+
 (test-end)
 

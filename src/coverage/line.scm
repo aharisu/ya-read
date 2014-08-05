@@ -14,11 +14,31 @@
 
 (select-module coverage.line)
 
+(define (reload-used-module)
+  (let1 modules (make-hash-table)
+    (for-each
+      (lambda (pattern)
+        (library-for-each
+          pattern
+          (lambda (name path)
+            (hash-table-put! modules name path))))
+      '(* *.* *.*.* ))
+    (for-each
+      (lambda (m)
+        (let1 name (module-name m)
+          (unless (member (car (string-split (symbol->string name) #\.))
+                          '("ya" "debug")
+                          string=?)
+            (if-let1 path (hash-table-get modules name #f)
+              (load path)))))
+      (all-modules))))
+
 (define (coverage-setup)
   (set! load-from-port ya-load-from-port)
   (set! read ya-read)
   (add-ya-read-after-hook read-after)
   (add-each-ya-read-after-hook each-read-after)
+  (reload-used-module)
   #t)
 
 (define (coverage-finish)

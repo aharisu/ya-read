@@ -438,7 +438,12 @@
   load
   #f
   (lambda (loop notify-queue script-file)
-    (load script-file)
+    (guard (e
+             [(<message-condition> err)
+              (enqueue! notify-queue (list 'error (slot-ref err 'message)))]
+             [else
+               (enqueue! notify-queue (list 'error (with-output-to-string (pa$ display err))))])
+      (load script-file))
     (loop)))
 
 (define-debug-cmd

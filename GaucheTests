@@ -1,0 +1,52 @@
+cgen
+char
+control
+data
+dbidbd
+debug ;Failure: For alpha conversion of local variables.
+dict
+dynwind.scm
+error
+exception
+file
+hash
+io
+;io2 ;Failure: not support srfi-38, #!gauche-legacy directive and #!r7rs reader directive.
+lazy
+list
+listener
+load
+load2
+logger
+macro
+math
+module
+multibyte
+number.scm
+object
+optimize ;Failure: interference of optimization by code injection
+package
+parseopt
+primsyn
+procedure
+process
+;;r7rs-tests ;Failure
+regexp
+rfc
+scripts
+selector
+serial
+sort
+srfi
+string
+;symcase ;Failure: not support case sensitive/insensitive
+symkey
+system
+text
+treemap
+util
+version
+weak
+;win-noconsole-threads
+www
+list

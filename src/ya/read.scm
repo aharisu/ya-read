@@ -435,23 +435,27 @@
     (begin
       (init-ctx! port (*char-kind-table*) (*reader-table*))
       (let1 exp (do-read #f port)
-        (if (eof-object? exp)
+        (if (null? *read-after-hook*)
           exp
-          (fold
-            (lambda (hook-proc exp) (hook-proc exp)) 
+          (if (eof-object? exp)
             exp
-            *read-after-hook*))))
+            (fold
+              (lambda (hook-proc exp) (hook-proc exp)) 
+              exp
+              *read-after-hook*)))))
     (*orginal-read* port)))
 
 (define (do-read-after sexp src-info)
-  (let1 sexp 
-    (fold
-      (lambda (hook sexp) (hook sexp src-info))
-      (if (and (pair? sexp) src-info)
-        (rlet1 ex-pair ((with-module gauche.internal extended-cons) (car sexp) (cdr sexp))
-          ((with-module gauche.internal pair-attribute-set!) ex-pair 'source-info src-info))
-        sexp)
-      *each-read-after-hook*)))
+  (let1 sexp (if (and (pair? sexp) src-info)
+               (rlet1 ex-pair ((with-module gauche.internal extended-cons) (car sexp) (cdr sexp))
+                 ((with-module gauche.internal pair-attribute-set!) ex-pair 'source-info src-info))
+               sexp)
+    (if (null?  *each-read-after-hook*)
+      sexp
+      (fold
+        (lambda (hook sexp) (hook sexp src-info))
+        sexp
+        *each-read-after-hook*))))
 
 (define (ya-read-rec port)
   (ya-read-rec-with-closer #f port))

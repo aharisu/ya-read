@@ -2,6 +2,7 @@
 (use gauche.parameter)
 (use gauche.threads)
 (use gauche.vport)
+(use file.util)
 (use srfi-13)
 (use util.queue)
 
@@ -157,7 +158,11 @@
     ([else (_ . _) (usage)]
      . rest)
     (unless (null? rest)
-      (set! default-script-file (car rest)))
+      (set! default-script-file
+        (let1 filepath (car rest)
+          (if (relative-path? filepath)
+            (build-path (sys-getcwd) filepath)
+            filepath))))
     (setup)
     (user-interface-entry-point)
     0))

@@ -338,7 +338,7 @@
             [(skip)
              (loop)]
             [(illegal)
-             (error "todo illegal")]))))
+             (raise-illegal-char port ch)]))))
     (get-output-string acc)))
 
 (define (read-hash-bang port)
@@ -509,7 +509,7 @@
           [(whitespace skip)
            (do-read-first delim middle? port kind-table reader-table)]
           [(illegal)
-           (error "todo illegal")])])))
+           (raise-illegal-char port ch)])])))
 
 (define (do-read-loop delim middle? port kind-table reader-table reader-table-cont
                       buffer term-macro-candidates
@@ -537,7 +537,7 @@
                          pending-chars candidate-reader-macro
                          src-info)]
           [(illegal)
-           (error "todo illegal")])])))
+           (raise-illegal-char port ch)])])))
 
 (define (do-read-loop-no-readermacro delim port kind-table reader-table buffer term-macro-candidates
                                      src-info)
@@ -563,7 +563,7 @@
            (do-read-loop-no-readermacro delim port kind-table reader-table buffer term-macro-candidates
                                         src-info)]
           [(illegal)
-           ])])))
+           (raise-illegal-char port ch)])])))
 
 (define (do-read-constituent delim middle? port ch kind-table reader-table reader-table-cont
                              buffer term-macro-candidates
@@ -637,7 +637,7 @@
           [(skip)
            (loop (read-char port) reader-macro reader-table-cont pending-chars)]
           [(illegal)
-           (error "todo illegal")])])))
+           (raise-illegal-char port ch)])])))
 
 (define (do-read-term-candidate next-type delim middle? port ch kind-table reader-table reader-table-cont buffer term-macro-candidates
                                     pending-chars candidate-reader-macro
@@ -704,6 +704,10 @@
         (list->string (reverse buffer)))
       middle?
       src-info)))
+
+(define (raise-illegal-char port ch)
+  (read-error (format "read illegal character: ~a" ch)
+              port))
 
 (define (char-kind ch kind-table)
   (or

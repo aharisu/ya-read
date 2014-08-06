@@ -370,6 +370,9 @@
       [else 
         (read-error (format "unknown #,-key: ~a" (car list)) port)])))
 
+(define (read-debug-print port)
+  `(debug-print ,(ya-read-rec port)))
+
 (define *reader-table*
   (make-parameter
     (rlet1 trie (make-trie)
@@ -407,6 +410,7 @@
       (trie-put! trie "|" (cons-reader-macro 'term read-multi-escape))
       (trie-put! trie "#!" (cons-reader-macro 'right-term read-hash-bang))
       (trie-put! trie "#,(" (cons-reader-macro 'right-term read-reader-constractor))
+      (trie-put! trie "#?=" (cons-reader-macro 'right-term read-debug-print))
       )))
 
 (define (add-reader-macro dispatch-string macro-type reader-macro)

@@ -238,6 +238,9 @@
   (ya-read port)
   (test* "reader constractor" 2 *counter*))
 
+(let1 port (wrap-ya-port (open-input-string "#?=(+ 1 3)"))
+  (test* "debug print" '4 (eval (ya-read port) (current-module))))
+
 (add-reader-macro "a" 'term (lambda (port) 1))
 (add-reader-macro "ab" 'right-term (lambda (port) 2))
 (add-reader-macro "bc" 'non-term (lambda (port) 3))

@@ -111,32 +111,38 @@
 (define (read-close-bracket port)
   (read-error "unexpected close paren ']'" port))
 
+(define (read-list-eof-error port src-info)
+  (if src-info
+    (read-error #`"unexpected end-of-file while reading a list (starting from line:,(cadr src-info) col:,(caddr src-info))" port)
+    (read-error "unexpected end-of-file while reading a list" port)))
+
 (define (read-list closer port)
-  (let loop ([pair '()])
-    (let1 result (ya-read-rec-with-closer closer port)
-      (cond
-        [(eof-object? result)
-         (read-error "unexpected end-of-file while reading a list" port)]
-        [(eq? result delim-sym)
-         (reverse pair)]
-        [(eq? result '|.|)
-         (let1 last-ch (ya-read-rec-with-closer closer port)
-           (cond
-             [(eof-object? last-ch)
-              (read-error "unexpected end-of-file while reading a list" port)]
-             [(eq? last-ch closer)
-              (read-error "bad dot syntax" port)]
-             [else
-               (let1 close-ch (ya-read-rec-with-closer closer port)
-                 (cond
-                   [(eof-object? close-ch)
-                    (read-error "unexpected end-of-file while reading a list" port)]
-                   [(eq? close-ch delim-sym)
-                    (reverse pair last-ch)]
-                   [else
-                     (read-error "bad dot syntax" port)]))]))]
-        [else
-          (loop (cons result pair))]))))
+  (let1 src-info (get-start-source-info port)
+    (let loop ([pair '()])
+      (let1 result (ya-read-rec-with-closer closer port)
+        (cond
+          [(eof-object? result)
+           (read-list-eof-error port src-info)]
+          [(eq? result delim-sym)
+           (reverse pair)]
+          [(eq? result '|.|)
+           (let1 last-ch (ya-read-rec-with-closer closer port)
+             (cond
+               [(eof-object? last-ch)
+                (read-list-eof-error port src-info)]
+               [(eq? last-ch closer)
+                (read-error "bad dot syntax" port)]
+               [else
+                 (let1 close-ch (ya-read-rec-with-closer closer port)
+                   (cond
+                     [(eof-object? close-ch)
+                      (read-list-eof-error port src-info)]
+                     [(eq? close-ch delim-sym)
+                      (reverse pair last-ch)]
+                     [else
+                       (read-error "bad dot syntax" port)]))]))]
+          [else
+            (loop (cons result pair))])))))
 
 (define (read-vector to->vector port)
   (to->vector (read-list #\) port)))

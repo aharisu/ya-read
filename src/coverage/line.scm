@@ -27,7 +27,7 @@
       (lambda (m)
         (let1 name (module-name m)
           (unless (member (car (string-split (symbol->string name) #\.))
-                          '("ya" "debug")
+                          '("ya" "debug" "coverage")
                           string=?)
             (if-let1 path (hash-table-get modules name #f)
               (load path)))))

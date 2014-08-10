@@ -31,35 +31,37 @@
 (define (setup-whitespace-reader)
   (add-char-kind #[\x0a;\x09;\x20;] 'constituent #t)
   (add-char-kind #[^\x0a;\x09;\x20;] 'skip #t)
-  ;;stack operation
-  (add-reader-macro "  " 'right-term read-push)
-  (add-reader-macro " \n " 'right-term read-clone-top)
-  (add-reader-macro " \t " 'right-term read-copy-nth-item)
-  (add-reader-macro " \n\t" 'right-term read-swap-first-second)
-  (add-reader-macro " \n\n" 'right-term read-discard-top)
-  (add-reader-macro " \t\n" 'right-term read-slide-items)
-  ;;numerical operation
-  (add-reader-macro "\t   " 'right-term (pa$ read-arithmetic +))
-  (add-reader-macro "\t  \t" 'right-term (pa$ read-arithmetic -))
-  (add-reader-macro "\t  \n" 'right-term (pa$ read-arithmetic *))
-  (add-reader-macro "\t \t " 'right-term (pa$ read-arithmetic /))
-  (add-reader-macro "\t \t\t" 'right-term (pa$ read-arithmetic modulo))
-  ;;heap operation
-  (add-reader-macro "\t\t " 'right-term read-address-store)
-  (add-reader-macro "\t\t\t" 'right-term read-address-retrieve)
-  ;;flow operation
-  (add-reader-macro "\n  " 'right-term read-define-label)
-  (add-reader-macro "\n \t" 'right-term read-call-routine)
-  (add-reader-macro "\n \n" 'right-term read-goto)
-  (add-reader-macro "\n\t " 'right-term (pa$ read-goto-pred zero?))
-  (add-reader-macro "\n\t\t" 'right-term (pa$ read-goto-pred negative?))
-  (add-reader-macro "\n\t\n" 'right-term read-return)
-  (add-reader-macro "\n\n\n" 'right-term read-halt)
-  ;;io operation
-  (add-reader-macro "\t\n  " 'right-term read-write-char)
-  (add-reader-macro "\t\n \t" 'right-term read-write-number)
-  (add-reader-macro "\t\n\t " 'right-term read-store-char)
-  (add-reader-macro "\t\n\t\t" 'right-term read-store-number)
+  (let1 reader-table (copy-reader-table)
+    ;;stack operation
+    (add-reader-macro "  " 'right-term read-push reader-table)
+    (add-reader-macro " \n " 'right-term read-clone-top reader-table)
+    (add-reader-macro " \t " 'right-term read-copy-nth-item reader-table)
+    (add-reader-macro " \n\t" 'right-term read-swap-first-second reader-table)
+    (add-reader-macro " \n\n" 'right-term read-discard-top reader-table)
+    (add-reader-macro " \t\n" 'right-term read-slide-items reader-table)
+    ;;numerical operation
+    (add-reader-macro "\t   " 'right-term (pa$ read-arithmetic +) reader-table)
+    (add-reader-macro "\t  \t" 'right-term (pa$ read-arithmetic -) reader-table)
+    (add-reader-macro "\t  \n" 'right-term (pa$ read-arithmetic *) reader-table)
+    (add-reader-macro "\t \t " 'right-term (pa$ read-arithmetic /) reader-table)
+    (add-reader-macro "\t \t\t" 'right-term (pa$ read-arithmetic modulo) reader-table)
+    ;;heap operation
+    (add-reader-macro "\t\t " 'right-term read-address-store reader-table)
+    (add-reader-macro "\t\t\t" 'right-term read-address-retrieve reader-table)
+    ;;flow operation
+    (add-reader-macro "\n  " 'right-term read-define-label reader-table)
+    (add-reader-macro "\n \t" 'right-term read-call-routine reader-table)
+    (add-reader-macro "\n \n" 'right-term read-goto reader-table)
+    (add-reader-macro "\n\t " 'right-term (pa$ read-goto-pred zero?) reader-table)
+    (add-reader-macro "\n\t\t" 'right-term (pa$ read-goto-pred negative?) reader-table)
+    (add-reader-macro "\n\t\n" 'right-term read-return reader-table)
+    (add-reader-macro "\n\n\n" 'right-term read-halt reader-table)
+    ;;io operation
+    (add-reader-macro "\t\n  " 'right-term read-write-char reader-table)
+    (add-reader-macro "\t\n \t" 'right-term read-write-number reader-table)
+    (add-reader-macro "\t\n\t " 'right-term read-store-char reader-table)
+    (add-reader-macro "\t\n\t\t" 'right-term read-store-number reader-table)
+    (set-reader-table! reader-table))
   )
 
 

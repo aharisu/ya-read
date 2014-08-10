@@ -39,7 +39,8 @@
   (export ya-read ya-read-rec
     add-ya-read-after-hook
     add-each-ya-read-after-hook
-    add-char-kind add-reader-macro
+    add-char-kind
+    copy-reader-table add-reader-macro set-reader-table!
     wrap-ya-port ungetc source-info
     ))
 
@@ -418,13 +419,22 @@
       (trie-put! trie "#?=" (cons-reader-macro 'right-term read-debug-print))
       )))
 
-(define (add-reader-macro dispatch-string macro-type reader-macro)
+(define (copy-reader-table :optional reader-table)
+  (apply trie '() (trie->list (if (undefined? reader-table) (*reader-table*) reader-table))))
+
+(define (add-reader-macro dispatch-string macro-type reader-macro
+                          :optional reader-table)
   (if (memq macro-type '(term right-term non-term))
-    (*reader-table* (apply trie '()
-                           (cons
-                             (cons dispatch-string (cons-reader-macro macro-type reader-macro))
-                             (trie->list (*reader-table*)))))
+    (let1 table (if (undefined? reader-table)
+                  (copy-reader-table) 
+                  reader-table)
+      (trie-put! table dispatch-string (cons-reader-macro macro-type reader-macro))
+      (if (undefined? reader-table)
+        (*reader-table* table)))
     (errorf "macro-type require one of the 'term, 'right-term or 'non-term")))
+
+(define (set-reader-table! reader-table)
+  (*reader-table* (copy-reader-table reader-table)))
 
 ;-------------------------
 ; reader entry point

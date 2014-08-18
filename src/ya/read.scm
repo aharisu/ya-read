@@ -92,10 +92,22 @@
 (define (eof-error literal-type port)
   (read-error #`"EOF encountered in a ,|literal-type| literal" port))
 
+(define (set-source-info port exp src-info)
+  (if (and (pair? exp) src-info)
+    (rlet1 ex-pair ((with-module gauche.internal extended-cons) (car exp) (cdr exp))
+      ((with-module gauche.internal pair-attribute-set!) ex-pair 'source-info src-info))
+    exp))
+
 (define delim-sym (gensym))
 
 (define (read-quote port)
-  (list 'quote (ya-read-rec port)))
+  (let* ([src-info (get-start-source-info port)]
+         [item (ya-read-rec port)])
+    (if (eof-object? item)
+      (eof-error "quote" port)
+      (rlet1 ret (set-source-info port (list 'quote item) src-info)
+        (when (read-reference? item)
+          (read-reference-push port (cdr ret) #f))))))
 
 (define (read-quasiquote port)
   (list 'quasiquote (ya-read-rec port)))
@@ -112,20 +124,29 @@
 (define (read-close-bracket port)
   (read-error "unexpected close paren ']'" port))
 
+(define (read-list closer port)
+  (let1 src-info (get-start-source-info port)
+    (receive (ret has-ref?) (read-list-internal closer port) 
+      (rlet1 ret (set-source-info port ret src-info)
+        (if has-ref?
+          (read-reference-push port ret #f))
+        ret))))
+
 (define (read-list-eof-error port src-info)
   (if src-info
     (read-error #`"unexpected end-of-file while reading a list (starting from line:,(cadr src-info) col:,(caddr src-info))" port)
     (read-error "unexpected end-of-file while reading a list" port)))
 
-(define (read-list closer port)
+(define (read-list-internal closer port)
   (let1 src-info (get-start-source-info port)
-    (let loop ([pair '()])
+    (let loop ([pair '()]
+               [ref-seen #f])
       (let1 result (ya-read-rec-with-closer closer port)
         (cond
           [(eof-object? result)
            (read-list-eof-error port src-info)]
           [(eq? result delim-sym)
-           (reverse pair)]
+           (values (reverse pair) ref-seen)]
           [(eq? result '|.|)
            (let1 last-ch (ya-read-rec-with-closer closer port)
              (cond
@@ -139,14 +160,23 @@
                      [(eof-object? close-ch)
                       (read-list-eof-error port src-info)]
                      [(eq? close-ch delim-sym)
-                      (reverse pair last-ch)]
+                      (values (reverse pair last-ch)
+                              (if (read-reference? last-ch)
+                                #t
+                                ref-seen))]
                      [else
                        (read-error "bad dot syntax" port)]))]))]
           [else
-            (loop (cons result pair))])))))
+            (loop (cons result pair)
+                  (if (read-reference? result)
+                    #t
+                    ref-seen))])))))
 
 (define (read-vector to->vector port)
-  (to->vector (read-list #\) port)))
+  (receive (ret has-ref?) (read-list-internal #\) port)
+    (rlet1 ret (to->vector ret)
+      (if has-ref? 
+        (read-reference-push port ret #f)))))
 
 (define (read-string incomplete? port)
   (define (eof-error str-acc)
@@ -192,7 +222,7 @@
   (let1 first-ch (read-char port)
     (if (eof-object? first-ch)
       (eof-error "character" port)
-      (let1 char-str (caar (do-read-loop-no-readermacro #f
+      (let1 char-str (car (do-read-loop-no-readermacro #f
                                                        port
                                                        (slot-ref port 'kind-table)
                                                        (slot-ref port 'reader-table)
@@ -365,19 +395,131 @@
       (undefined))))
 
 (define (read-reader-constractor port)
-  (let1 list (read-list #\) port)
+  (receive (list has-ref?) (read-list-internal #\) port)
     (cond
       [(has-ctx? port :skip)
        #f]
       [(null? list)
        (read-error (format "bad #,-form: ~a" list) port)]
       [(%get-reader-ctor (car list))
-       => (lambda (ctor) (apply (car ctor) (cdr list)))]
+       => (lambda (ctor) 
+            (rlet1 ret (apply (car ctor) (cdr list))
+              (if has-ref?
+                (read-reference-push port ret (cdr ctor)))))]
       [else 
         (read-error (format "unknown #,-key: ~a" (car list)) port)])))
 
 (define (read-debug-print port)
   `(debug-print ,(ya-read-rec port)))
+
+;;
+;; Read reference
+;;
+
+(define unbound-sym (gensym "unbound"))
+(define reference-sym (gensym "reference"))
+
+(define make-read-reference
+  (pa$ list reference-sym unbound-sym))
+
+(define (read-reference? ref)
+  (and (pair? ref) (eq? (car ref) reference-sym)))
+
+(define (read-reference-realized? ref)
+  (not (eq? (cadr ref) unbound-sym)))
+
+(define read-reference-value-get cadr)
+
+(define (read-reference-value-set! ref value)
+  (set-car! (cdr ref) value))
+
+(define (read-reference-push port obj finisher)
+  (slot-set! port 'ref-pending (acons obj finisher (slot-ref port 'ref-pending))))
+
+(define (read-reference-flush port)
+  (for-each
+    (lambda (entry)
+      (let ([obj (car entry)]
+            [finisher (cdr entry)])
+        (cond
+          [finisher
+            (finisher obj)]
+          [(pair? obj)
+           (let loop ([ep obj])
+             (if (read-reference? (car ep))
+               (set-car! ep (read-reference-value-get (car ep))))
+             (cond
+               [(null? (cdr ep))
+                ;;do nothing
+                ]
+               ;;in case we have (... . #N#)
+               [(read-reference? (cdr ep))
+                (set-cdr! ep (read-reference-value-get (cdr ep)))]
+               [else
+                 (loop (cdr ep))]))]
+          [(vector? obj)
+           (let1 size (vector-length obj)
+             (let loop ([i 0])
+               (when (< i len)
+                 (let1 ep (vector-ref obj i)
+                   (if (read-reference? ep)
+                     (vector-set! obj i (read-reference-value-get ep))))
+                 (loop (+ i 1)))))]
+          [else
+            (read-error "read-context-flush: recursive reference only supported with vector and lists" port) ])))
+    (slot-ref port 'ref-pending)))
+
+(define (read-reference refnum port)
+  (receive (refnum ch) (let loop ([refnum refnum]
+                                  [ch (read-char port)])
+                         (cond
+                           [(eof-object? ch)
+                            (eof-error "reference" port)]
+                           [(char-numeric? ch)
+                            (loop
+                              (+ (* refnum 10) (digit->integer ch))
+                              (read-char port))]
+                           [(or (char=? ch #\#) (char=? ch #\=))
+                            (values refnum ch)]
+                           [else
+                             (read-error
+                               (format
+                                 "invalid reference form (must be either #digits# or #digits=) : #~a~a" 
+                                 refnum ch)
+                               port)]))
+    (if (char=? #\# ch)
+      ;;#N.*# pattern
+      (let1 e (if-let1 table (slot-ref port 'ref-table)
+                (hash-table-get table refnum unbound-sym)
+                unbound-sym)
+        (when (eq? unbound-sym e)
+          (read-error
+            (format "invalid reference number in #~a=" refnum)
+            port))
+        (if (and (read-reference? e) (read-reference-realized? e))
+          (read-reference-value-get e)
+          e))
+      ;;#N.*= pattern
+      (let ([table (if-let1 ref-table (slot-ref port 'ref-table)
+                     ref-table
+                     (rlet1 table (make-hash-table 'eqv?)
+                       (slot-set! port 'ref-table table)))]
+            [ref (make-read-reference)])
+        (unless (eq? (hash-table-get table refnum unbound-sym) unbound-sym)
+          (read-error
+            (format "duplicate back-reference number in #~a=" refnum)
+            port))
+        ;;ref-register
+        (hash-table-put! table refnum ref)
+        (let1 val (ya-read-rec port)
+          ;;an edge case: #0=#0#
+          (when (eq? ref val)
+            (read-error 
+              (format "interminate read reference: #~a=#~a#"
+                      refnum refnum)
+              port))
+          (read-reference-value-set! ref val)
+          val)))))
 
 (define *reader-table*
   (make-parameter
@@ -417,6 +559,17 @@
       (trie-put! trie "#!" (cons-reader-macro 'right-term read-hash-bang))
       (trie-put! trie "#,(" (cons-reader-macro 'right-term read-reader-constractor))
       (trie-put! trie "#?=" (cons-reader-macro 'right-term read-debug-print))
+      ;;read reference macro
+      (trie-put! trie "#0" (cons-reader-macro 'right-term (pa$ read-reference 0)))
+      (trie-put! trie "#1" (cons-reader-macro 'right-term (pa$ read-reference 1)))
+      (trie-put! trie "#2" (cons-reader-macro 'right-term (pa$ read-reference 2)))
+      (trie-put! trie "#3" (cons-reader-macro 'right-term (pa$ read-reference 3)))
+      (trie-put! trie "#4" (cons-reader-macro 'right-term (pa$ read-reference 4)))
+      (trie-put! trie "#5" (cons-reader-macro 'right-term (pa$ read-reference 5)))
+      (trie-put! trie "#6" (cons-reader-macro 'right-term (pa$ read-reference 6)))
+      (trie-put! trie "#7" (cons-reader-macro 'right-term (pa$ read-reference 7)))
+      (trie-put! trie "#8" (cons-reader-macro 'right-term (pa$ read-reference 8)))
+      (trie-put! trie "#9" (cons-reader-macro 'right-term (pa$ read-reference 9)))
       )))
 
 (define (copy-reader-table :optional reader-table)
@@ -454,6 +607,7 @@
     (begin
       (init-ctx! port (*char-kind-table*) (*reader-table*))
       (let1 exp (do-read #f port)
+        (read-reference-flush port)
         (if (null? *read-after-hook*)
           exp
           (if (eof-object? exp)
@@ -465,16 +619,12 @@
     (*orginal-read* port)))
 
 (define (do-read-after sexp src-info)
-  (let1 sexp (if (and (pair? sexp) src-info)
-               (rlet1 ex-pair ((with-module gauche.internal extended-cons) (car sexp) (cdr sexp))
-                 ((with-module gauche.internal pair-attribute-set!) ex-pair 'source-info src-info))
-               sexp)
-    (if (null?  *each-read-after-hook*)
+  (if (null? *each-read-after-hook*)
+    sexp
+    (fold
+      (lambda (hook sexp) (hook sexp src-info))
       sexp
-      (fold
-        (lambda (hook sexp) (hook sexp src-info))
-        sexp
-        *each-read-after-hook*))))
+      *each-read-after-hook*)))
 
 (define (ya-read-rec port)
   (ya-read-rec-with-closer #f port))
@@ -492,21 +642,20 @@
        (eof-object)]
       [(eq? result :delim)
        delim-sym]
-      [(string? (caar result))
-       (when (cdar result)
+      [(string? (car result))
+       (when (cdr result)
          (add-ctx! port :middle))
        (do-read-after
-         (read-symbol-or-number (caar result))
-         (cdr result))]
-      [(reader-macro? (caar result))
-       (when (cdar result)
+         (read-symbol-or-number (car result))
+         (get-start-source-info port))]
+      [(reader-macro? (car result))
+       (when (cdr result)
          (add-ctx! port :middle))
-       (let1 macro-result (values->list ((get-reader-macro-fun (caar result)) port))
+       (let* ([src-info (get-start-source-info port)]
+              [macro-result (values->list ((get-reader-macro-fun (car result)) port))])
          (if (null? macro-result)
            (do-read delim port)
-           (do-read-after
-             (car macro-result)
-             (cdr result))))])))
+           (do-read-after (car macro-result) src-info)))])))
 
 (define (do-read-first delim middle? port kind-table reader-table)
   (let1 ch (read-char port)
@@ -697,12 +846,11 @@
           (values result-chars (append ungetc-chars pending-chars) #f))))
     ;; ungetc all pending-chars
     (for-each (cut ungetc <> port) pending-chars)
-    (acons
+    (cons
       (if reader-macro
         reader-macro
         (list->string (reverse buffer)))
-      middle?
-      (get-start-source-info port))))
+      middle?)))
 
 (define (raise-illegal-char port ch)
   (read-error (format "read illegal character: ~a" ch)
@@ -749,11 +897,15 @@
    (kind-table)
    (reader-table)
    (source-info :init-value #f)
+   (ref-table)
+   (ref-pending)
    ))
 
 (define (init-ctx! port kind-table reader-table)
   (slot-set! port 'kind-table kind-table)
   (slot-set! port 'reader-table reader-table)
+  (slot-set! port 'ref-table #f)
+  (slot-set! port 'ref-pending '())
   )
 
 (define (add-ctx! port ctx)

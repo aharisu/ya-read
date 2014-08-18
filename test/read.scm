@@ -214,6 +214,12 @@
   (test* "s-exp righte-term macro" '(1) (ya-read port))
   (test* "s-exp righte-term macro" (eof-object) (ya-read port)))
 
+(let1 port (wrap-ya-port (open-input-string "#0=(1 2 '#0# 3) #12=(1 2 . '#12#) #0=#(1 2 '#0# 3)"))
+  (test* "read reference" #0='(1 2 #0# 3) (ya-read port))
+  (test* "read reference" #12='(1 2 . #12#) (ya-read port))
+  (test* "read reference" #1='#(1 2 #1# 3) (ya-read port))
+  (test* "read reference" (eof-object) (ya-read port)))
+
 (define-reader-ctor 'pi (lambda () (* (atan 1) 4)))
 (define-reader-ctor 'hash
   (lambda (type . pairs)

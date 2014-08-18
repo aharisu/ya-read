@@ -11,7 +11,7 @@ exception
 file
 hash
 io
-;io2 ;Failure: not support srfi-38, #!gauche-legacy directive and #!r7rs reader directive.
+io2 ;Failure: #!gauche-legacy directive and #!r7rs reader directive.
 lazy
 list
 listener
